@@ -63,6 +63,6 @@ After the agent finishes, close that session. Laps always run in a fresh session
 
 ## Status
 
-Tested so far: scripts and workflows parse; `gates` and `calibrate` pass on GitHub with no application present. Not yet tested: a full lap, the pull request checks, the hidden-scenario judge. See [CHANGELOG.md](CHANGELOG.md).
+Tested so far: an agent-style setup of a throwaway project end to end; `gates` and `calibrate` on GitHub; the two guard checks on a real pull request. Not yet tested: the hidden-scenario judge with real tokens, and a full lap. See [CHANGELOG.md](CHANGELOG.md).
 
 Planned: Kiro versions of the three agent set-up files (`.kiro/steering/`, `.kiro/agents/`), and AWS CodeBuild versions of the workflows.

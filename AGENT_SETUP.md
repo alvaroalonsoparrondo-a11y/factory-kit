@@ -50,8 +50,8 @@ bash init-project.sh PROJECT
 ```
 
 **Check:**
-- No file contains a placeholder (two underscores, then `OWNER`, `PROJECT` or `PARENT_DIR`, then two underscores), except `README.md`, `MODIFYING.md`, `CHANGELOG.md` and this file.
-- Both `init-project.sh` files are gone.
+- No file contains a placeholder (two underscores, then `OWNER`, `PROJECT` or `PARENT_DIR`, then two underscores), except `MODIFYING.md`, which explains them.
+- Both `init-project.sh` files are gone. In `PROJECT`, `README.md` is now a short project page, and the kit-only files `AGENT_SETUP.md`, `CHANGELOG.md` and `PROJECT_README.md` are gone. Keep following the copy of these instructions you already read.
 - The JSON file in `PROJECT/.claude/` parses, and its deny list names `PROJECT-holdouts`.
 
 Commit in each repository ("Fill in project names") and push.
@@ -64,7 +64,7 @@ npx -y skills add bmad-code-org/BMAD-METHOD/skills/method --skill '*' -a claude-
 uv run --no-cache .claude/skills/bmad/scripts/setup.py --project-root . --skill .claude/skills/bmad --root .claude/skills
 ```
 
-The setup command prints JSON. It must show `"current": true` and an empty `"problems"` list. If it lists pending questions, ask the person; do not invent answers.
+The setup command prints JSON. It must show `"current": true` and an empty `"problems"` list (`"status"` may be `created` or `repaired`; both are fine). If it lists pending questions, ask the person; do not invent answers.
 
 **Check** that the factory's BMAD rules are picked up:
 
@@ -100,11 +100,11 @@ git remote add kit https://github.com/OWNER/factory-kit-holdouts.git && git fetc
 
 - In `PROJECT`: `bash harness/run-gates.sh` must exit 0 and print `NOTICE: no backend yet, nothing to judge.`
 - In `PROJECT-holdouts`: `bash run-judges.sh ../PROJECT` must exit 0 and write `no-app` to `result.txt`. Delete `result.txt` afterwards.
-- On GitHub: `gh workflow run gates --repo OWNER/PROJECT` and `gh workflow run calibrate --repo OWNER/PROJECT`. Wait for both and confirm the conclusion is `success`. If one fails, show the failing step's log.
+- On GitHub: pushes to `main` should already have started `gates` runs; confirm at least one succeeded. Then also `gh workflow run gates --repo OWNER/PROJECT` and `gh workflow run calibrate --repo OWNER/PROJECT`. Wait for both and confirm the conclusion is `success`. If one fails, show the failing step's log.
 
 ## Step 7: Branch protection (try, do not force)
 
-Try to protect `main` in `OWNER/PROJECT` through the GitHub API: require a pull request; required status checks `gates`, `protected-paths`, `scope-guard` and `holdouts`; 0 required approvals. If GitHub refuses (for example a free plan with a private repository), do not work around it. Report it as open.
+Try to protect `main` in `OWNER/PROJECT` through the GitHub API: require a pull request; required status checks `gates`, `protected-paths`, `scope-guard` and `holdouts`; 0 required approvals. If GitHub refuses (a free plan answers 403 "Upgrade to GitHub Pro or make this repository public" for a private repository), do not work around it. Report it as open.
 
 ## Step 8: Report
 

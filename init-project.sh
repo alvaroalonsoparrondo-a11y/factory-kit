@@ -16,6 +16,11 @@ for f in $files; do
   echo "filled in: $f"
 done
 
+# A project gets its own README; the kit-only documents go.
+mv -- PROJECT_README.md README.md
+rm -f -- AGENT_SETUP.md CHANGELOG.md
+echo "replaced README.md; removed kit-only AGENT_SETUP.md and CHANGELOG.md"
+
 rm -- init-project.sh
 echo
 echo "Done. Next: follow RUNBOOK.md, starting with 'Install BMAD'."
