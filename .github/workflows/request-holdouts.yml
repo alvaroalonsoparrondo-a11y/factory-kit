@@ -22,6 +22,10 @@ jobs:
           APP_REPO: ${{ github.repository }}
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          if [ -z "$GH_TOKEN" ] || [ -z "$HOLDOUTS_REPO" ]; then
+            echo "::error::Set the secret HOLDOUTS_DISPATCH_TOKEN and the variable HOLDOUTS_REPO (see RUNBOOK.md, one-time setup)."
+            exit 1
+          fi
           gh api "repos/$HOLDOUTS_REPO/dispatches" \
             -f event_type=judge \
             -f "client_payload[repo]=$APP_REPO" \
