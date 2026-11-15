@@ -2,6 +2,10 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-15 — Agent setup prompt
+
+- **README: "Start a new project with an agent".** A prompt that has an agent create both repositories from the templates, fill in names, install BMAD, set variables and labels, and check the judge. Tokens and the fence check stay with a human. Not yet run end to end.
+
 ## 2026-11-15 — First version
 
 Made from the `factory-pilot` project before it had any product code.
