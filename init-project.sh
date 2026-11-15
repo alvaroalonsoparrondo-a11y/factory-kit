@@ -10,7 +10,7 @@ PARENT="$(cd .. && pwd)"
 
 files="$(grep -rlE '__OWNER__|__PROJECT__|__PARENT_DIR__' . \
   --exclude-dir=.git --exclude-dir=node_modules --exclude=init-project.sh \
-  --exclude=README.md --exclude=MODIFYING.md --exclude=CHANGELOG.md || true)"
+  --exclude=README.md --exclude=MODIFYING.md --exclude=CHANGELOG.md --exclude=AGENT_SETUP.md || true)"
 for f in $files; do
   sed -i "s#__PARENT_DIR__#${PARENT}#g; s#__PROJECT__#${PROJECT}#g; s#__OWNER__#${OWNER}#g" "$f"
   echo "filled in: $f"

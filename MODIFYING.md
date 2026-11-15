@@ -12,7 +12,7 @@ The factory files have the same paths in both. That is what makes a change easy 
 **Factory files** — a change to any of these is a factory change:
 
 ```
-FACTORY_RULES.md   CLAUDE.md   RUNBOOK.md   MODIFYING.md
+FACTORY_RULES.md   CLAUDE.md   RUNBOOK.md   MODIFYING.md   AGENT_SETUP.md
 harness/           .github/    _bmad/custom/
 .claude/settings.json          .claude/skills/lap/
 ```
@@ -89,6 +89,7 @@ The same three rules, between `factory-kit-holdouts` and `<project>-holdouts`. O
 | The protected-path list | It appears in four places | Change all four together: `FACTORY_RULES.md` section 2, `.claude/settings.json`, `.github/CODEOWNERS`, and the pattern in `judge-guards.yml`. |
 | The runtime contract in `harness/README.md` | Gates, the hidden-scenario runner and BMAD's architect all rely on it | Update `harness/run-gates.sh`, `run-judges.sh` in the hidden-scenario kit, and `_bmad/custom/bmad-architecture.toml` if they mention the item. |
 | `_bmad/custom/*.toml` | BMAD merges these with its defaults | Check with `uv run --no-cache _bmad/scripts/resolve_customization.py --skill .claude/skills/<skill> --project-root . --key workflow` (or `--key agent`). |
+| How a new project is set up | The steps exist in two forms: for a person and for an agent | Change `AGENT_SETUP.md` and the one-time setup in `RUNBOOK.md` together. Do not put steps in the README prompt; it only points to `AGENT_SETUP.md`. |
 | A BMAD upgrade | Skill names and customisation keys can change | Upgrade in one project first, run a lap, then update `skills-lock.json` in the kit. |
 
 ## What not to change in a project

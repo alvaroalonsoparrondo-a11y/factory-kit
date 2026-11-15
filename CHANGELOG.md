@@ -4,7 +4,7 @@ Newest first. One entry per factory change: what was seen, where, and what chang
 
 ## 2026-11-15 — Agent setup prompt
 
-- **README: "Start a new project with an agent".** A prompt that has an agent create both repositories from the templates, fill in names, install BMAD, set variables and labels, and check the judge. Tokens and the fence check stay with a human. Not yet run end to end.
+- **`AGENT_SETUP.md` added; README prompt shortened.** The first version put all eight setup steps inside a prompt in the README. That duplicated `RUNBOOK.md` and would drift, so the steps moved to `AGENT_SETUP.md` and the prompt now only gives owner, project, folder and two guard rules, and points to that file. Pattern taken from the short install prompt of coleam00/ai-software-factory. Not yet run end to end.
 
 ## 2026-11-15 — First version
 
