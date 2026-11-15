@@ -1,0 +1,10 @@
+# The judge and the constitution belong to named humans.
+# Set by init-project.sh: the GitHub user or team that approves changes to these paths.
+/MISSION.md                 @__OWNER__
+/FACTORY_RULES.md           @__OWNER__
+/CLAUDE.md                  @__OWNER__
+/harness/                   @__OWNER__
+/.github/                   @__OWNER__
+/.claude/settings.json      @__OWNER__
+/.claude/skills/lap/        @__OWNER__
+/_bmad/custom/              @__OWNER__

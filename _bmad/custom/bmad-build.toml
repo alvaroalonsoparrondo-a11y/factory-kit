@@ -1,0 +1,40 @@
+# Factory rules for every BMAD build session. Team file: commit it. Human-owned.
+
+[workflow]
+
+persistent_facts = [
+  "file:{project-root}/MISSION.md",
+  "file:{project-root}/FACTORY_RULES.md",
+  "file:{project-root}/harness/README.md",
+  "This build runs inside a factory lap. The plan must cover exactly one ticket and must not touch any protected path named in FACTORY_RULES.md.",
+  "Every acceptance criterion in the plan needs an automated test that fails without the change: a backend test, a frontend unit test, or a Playwright journey in e2e/.",
+]
+
+# Always review with the full set of lenses.
+review = "thorough"
+
+on_complete = """
+Do not push. Do not create a pull request, and do not offer to. Return control to the lap skill, which runs the gates and pushes.
+"""
+
+[[workflow.thorough_lenses]]
+id = "factory-judge"
+name = "Factory Judge"
+instruction = """
+Launch a context-free subagent with this prompt:
+
+You review one change for a software factory. Read `MISSION.md`, `FACTORY_RULES.md` and `harness/README.md` at the repository root, then the plan at `{plan_file}`, then the unified diff at `{diff_file}`.
+
+Report each of these that you find, with the file and the evidence:
+1. A hard invariant in MISSION.md that the change breaks, or behaviour that MISSION.md puts out of scope.
+2. Any edit to a protected path listed in FACTORY_RULES.md.
+3. Anything FACTORY_RULES.md calls irreversible: identity, login, permissions, migrations, data deletion, secrets, deployment.
+4. A test that was deleted, skipped, disabled or weakened, or an assertion changed without a stated requirement.
+5. An acceptance criterion in the plan with no automated test that would fail without the change.
+6. A break of the runtime contract in harness/README.md (health, build identity, APP_DATA_DIR, start command).
+7. Work outside the one ticket: extra features, unrelated refactoring, new dependencies the ticket does not name.
+
+Output a Markdown list of findings only. If there are none, say "No factory findings."
+
+Review by inspection only. Do not modify code, run builds or tests, or invoke quality gates. Do not invoke any skill, and do not spawn subagents of your own. Return your findings as text in your final message.
+"""

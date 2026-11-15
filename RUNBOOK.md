@@ -1,0 +1,72 @@
+# Runbook
+
+How to set up this project and run laps. To change the factory itself, see [MODIFYING.md](MODIFYING.md).
+
+You drive the factory by hand at three points: you start each lap, you open the pull request in the browser, and you paste red checks back. The agent never uses `gh`.
+
+## One-time setup
+
+1. **Fill in the placeholders** (only if `init-project.sh` is still in this folder): `bash init-project.sh __OWNER__ __PROJECT__`, then commit and push.
+2. **Install BMAD v7** in this folder (needs Node and `uv`):
+
+   ```bash
+   npx -y skills add bmad-code-org/BMAD-METHOD/skills/core-tools --skill '*' -a claude-code -y
+   ```
+
+   ```bash
+   npx -y skills add bmad-code-org/BMAD-METHOD/skills/method --skill '*' -a claude-code -y
+   ```
+
+   Then, in a Claude Code session here, say `bmad setup`. Commit what it created (`.claude/skills/`, `_bmad/`).
+3. **Check the fence.** `.claude/settings.json` must exist and name this project's `-holdouts` folder. In a Claude Code session here, ask it to edit `MISSION.md`; it must be refused.
+4. **Create two fine-grained tokens** (GitHub → Settings → Developer settings). Create them yourself; never give them to the agent.
+
+   | Token | Repository access | Permissions | Store as |
+   |---|---|---|---|
+   | Dispatch | `__PROJECT__-holdouts` only | Contents: read and write | Secret `HOLDOUTS_DISPATCH_TOKEN` in `__PROJECT__` |
+   | Status | `__PROJECT__` only | Contents: read; Commit statuses: read and write | Secret `APP_REPO_TOKEN` in `__PROJECT__-holdouts` |
+
+5. **Set two repository variables** (Settings → Secrets and variables → Actions → Variables):
+   - in `__PROJECT__`: `HOLDOUTS_REPO` = `__OWNER__/__PROJECT__-holdouts`
+   - in `__PROJECT__-holdouts`: `APP_REPO` = `__OWNER__/__PROJECT__`
+6. **Create two labels** in `__PROJECT__`: `human-judge-change` and `human-approved-irreversible`.
+7. **Protect `main`** in `__PROJECT__` (Settings → Branches): require a pull request, and require these status checks: `gates`, `protected-paths`, `scope-guard`, `holdouts`. A check can only be selected after it has run once, so open a first small pull request (for example, the filled-in `MISSION.md`, with the `human-judge-change` label) and then add the checks.
+   - Approvals: 1, by someone other than the person who ran the lap. On a one-person trial: 0, because GitHub does not let you approve your own pull request.
+   - On a free GitHub plan, branch protection is not enforced on private repositories. The checks still run and show red or green; you have to respect them yourself.
+8. **Link the kit**, so factory changes can travel: `git remote add kit https://github.com/__OWNER__/factory-kit.git`
+
+## Plan the product (BMAD, interactive, in this folder)
+
+1. `bmad-agent-pm` — write the PRD with John. For a first project pick something small: five to eight stories.
+2. **You** fill in `MISSION.md` from the PRD and merge it. The agent is not allowed to.
+3. `bmad-architecture` — it already knows the stack and the runtime contract in `harness/README.md`.
+4. `bmad-agent-po` — Sofia slices the epic into tickets. The first one is the walking skeleton.
+5. Commit the planning documents to `main`.
+
+## Write the hidden scenarios (separate session, in `../__PROJECT__-holdouts`)
+
+Open a **different** agent session in the `-holdouts` folder. Give it the PRD and `MISSION.md`. Ask for three or four scenarios beyond `H-00`. Commit and push there. Never do this in the session that runs laps.
+
+## Run laps
+
+In an agent session opened in this folder:
+
+1. Say `run a lap` (or `lap <ticket id>`).
+2. When it stops, open the compare link it printed, paste the title and body, create the pull request.
+3. Watch the four checks.
+   - All green: merge, then tell the session `merged`.
+   - Red: copy the failing check's name and output, paste it into the session. For `holdouts`, paste only the status line (`failed: H-03`).
+4. After the walking skeleton merges: commit an empty `harness/skeleton.lock` (a factory change, by you).
+
+## Calibrate the judge
+
+After two or three tickets, add deliberate defects (see `harness/mutations/README.md`) and run the `calibrate` workflow from the Actions tab, or `bash harness/calibrate.sh` locally.
+
+## What to record
+
+Per lap: fix rounds; which check failed; whether a hidden scenario caught something the build session had called done; anything the agent tried to change that it should not. When a lap shows a problem in the factory itself, fix it as [MODIFYING.md](MODIFYING.md) describes and add it to the kit's `CHANGELOG.md`.
+
+## Limits to keep in mind
+
+- The fence is a guard rail. A shell command can still read or write a denied path. The real enforcement is the four required checks.
+- The workflows assume Java 17 + Spring Boot + Maven in `backend/`, Angular in `frontend/`, Playwright in `e2e/`.

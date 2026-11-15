@@ -1,0 +1,28 @@
+# Asks the holdouts repository to judge this pull request. Human-owned.
+#
+# pull_request_target: runs as it is on the base branch and never checks out
+# pull request code, so the token below cannot be reached by a pull request.
+# The holdouts repository posts the required status "holdouts" on the commit.
+name: request-holdouts
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions: {}
+
+jobs:
+  request:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send the commit to the holdouts repository
+        env:
+          GH_TOKEN: ${{ secrets.HOLDOUTS_DISPATCH_TOKEN }}
+          HOLDOUTS_REPO: ${{ vars.HOLDOUTS_REPO }}
+          APP_REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          gh api "repos/$HOLDOUTS_REPO/dispatches" \
+            -f event_type=judge \
+            -f "client_payload[repo]=$APP_REPO" \
+            -f "client_payload[sha]=$SHA"

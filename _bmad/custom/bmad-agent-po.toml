@@ -1,0 +1,13 @@
+# Factory rules for the product owner (Sofia). Team file: commit it. Human-owned.
+
+[agent]
+
+persistent_facts = [
+  "file:{project-root}/MISSION.md",
+  "file:{project-root}/FACTORY_RULES.md",
+  "file:{project-root}/harness/README.md",
+  "The first ticket of the first epic is the walking skeleton: the smallest real path that CI can build, start and check end to end. It must deliver everything in the runtime contract in harness/README.md, plus one trivial real feature visible in the UI and one Playwright journey that proves it.",
+  "Each story is one lap: one branch, one pull request, small enough to review in fifteen minutes. Split anything larger.",
+  "A ticket that needs anything FACTORY_RULES.md calls irreversible, or a change to a protected path, is marked as needing a human decision in its notes and is never handed to a lap as it is.",
+  "Leave out work that contradicts MISSION.md and report the conflict to the user.",
+]
