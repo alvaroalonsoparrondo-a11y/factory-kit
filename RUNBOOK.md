@@ -58,6 +58,19 @@ In an agent session opened in this folder:
    - Red: copy the failing check's name and output, paste it into the session. For `holdouts`, paste only the status line (`failed: H-03`).
 4. After the walking skeleton merges: commit an empty `harness/skeleton.lock` (a factory change, by you).
 
+## Follow the tickets
+
+The board is one page with a row per ticket: its stage, its status, what it needs from you, and how often it was reviewed. Open `BOARD.md` on the `board` branch:
+
+`https://github.com/__OWNER__/__PROJECT__/blob/board/BOARD.md`
+
+- The `board` workflow rebuilds it on every push to `main` or a `story/` branch, on every pull request change, and when a check finishes. To rebuild by hand, run the `board` workflow from the Actions tab.
+- It is built from Git, GitHub and the BMAD files. It stores nothing itself, and the lap agent cannot write to it.
+- Reviews are shown as three numbers: BMAD review passes / fix rounds / human reviews.
+- A merged pull request counts as done.
+- Work that is not pushed is not on the board. The lap pushes its branch when it starts, so this is only the first minute of a lap.
+- Anything the board cannot read is listed under "Problems" at the bottom.
+
 ## Calibrate the judge
 
 After two or three tickets, add deliberate defects (see `harness/mutations/README.md`) and run the `calibrate` workflow from the Actions tab, or `bash harness/calibrate.sh` locally.

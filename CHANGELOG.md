@@ -2,6 +2,16 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-16 — Ticket board
+
+Seen: the state of a ticket was split between BMAD files and GitHub tabs, and nothing showed what waited for a human.
+
+- **`harness/board/board.py` and the `board` workflow added.** CI builds `BOARD.md` and `board.json` on a `board` branch: one row per ticket with stage, status, what it needs from a human, the four checks, and three review counts (BMAD passes / fix rounds / human reviews). Standard library only, no state of its own. Design: `docs/superpowers/specs/2026-11-16-ticket-board-design.md`.
+- **`lap` skill pushes earlier.** The branch is pushed when the lap starts and again when the plan is approved, so a running lap is on the board. A lap that stops on an irreversible action marks the ticket blocked and pushes that.
+- **`init-project.sh`** removes the kit's design documents from a new project.
+
+Tested: 28 unit tests; a read-only dry run against `factory-pilot` (seven planned tickets) and `factory-trial` (no tickets). Not yet tested: the workflow itself on GitHub, and a ticket past "Planned" with real data. Cost per ticket was set aside.
+
 ## 2026-11-15 — First end-to-end setup test (`factory-trial`)
 
 `AGENT_SETUP.md` was followed step by step to create a throwaway project. Steps 1–6 passed as written; step 7 was refused by GitHub (free plan, private repository), as the instructions expect.

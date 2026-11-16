@@ -19,7 +19,9 @@ done
 # A project gets its own README; the kit-only documents go.
 mv -- PROJECT_README.md README.md
 rm -f -- AGENT_SETUP.md CHANGELOG.md
-echo "replaced README.md; removed kit-only AGENT_SETUP.md and CHANGELOG.md"
+rm -rf -- docs/superpowers
+rmdir -- docs 2>/dev/null || true
+echo "replaced README.md; removed kit-only AGENT_SETUP.md, CHANGELOG.md and design documents"
 
 rm -- init-project.sh
 echo
