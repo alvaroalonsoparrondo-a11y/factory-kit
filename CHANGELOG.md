@@ -10,7 +10,9 @@ Seen: the state of a ticket was split between BMAD files and GitHub tabs, and no
 - **`lap` skill pushes earlier.** The branch is pushed when the lap starts and again when the plan is approved, so a running lap is on the board. A lap that stops on an irreversible action marks the ticket blocked and pushes that.
 - **`init-project.sh`** removes the kit's design documents from a new project.
 
-Tested: 28 unit tests; a read-only dry run against `factory-pilot` (seven planned tickets) and `factory-trial` (no tickets). Not yet tested: the workflow itself on GitHub, and a ticket past "Planned" with real data. Cost per ticket was set aside.
+Tested: 28 unit tests; a read-only dry run against `factory-pilot` (seven planned tickets) and `factory-trial` (no tickets). Tested on GitHub in `factory-trial` with three test tickets and a test pull request: first build from a push to `main`; lap started (empty branch); blocked lap with its reason; built with the compare link; in CI with a check that never reported; a red `protected-paths`; fix rounds counted after two more pushes; merged shown as done, which unlocked the next ticket. The push, pull request and finished-check triggers all fired.
+
+Not yet tested on GitHub (unit tests only): a red `holdouts` with its IDs and the `status` trigger (both need the holdout tokens), a pull request closed without merge, the human review count, and two epics that share a ticket id. Cost per ticket was set aside.
 
 ## 2026-11-15 — First end-to-end setup test (`factory-trial`)
 
