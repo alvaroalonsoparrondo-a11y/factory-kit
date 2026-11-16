@@ -1,0 +1,60 @@
+# Rebuilds the ticket board (BOARD.md on the `board` branch) from Git, GitHub and the BMAD files. Human-owned.
+name: board
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, "story/**"]
+  pull_request_target:
+    types: [opened, reopened, closed, labeled, unlabeled, synchronize]
+  workflow_run:
+    workflows: [gates, judge-guards]
+    types: [completed]
+  status:
+
+permissions:
+  contents: write
+  pull-requests: read
+  checks: read
+  statuses: read
+  actions: read
+
+# One rebuild at a time; a newer event waits for the running one.
+concurrency:
+  group: board
+  cancel-in-progress: false
+
+jobs:
+  board:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Always the script from main, never from the branch that caused the event.
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Test the board script
+        run: python3 -m unittest discover -s harness/board
+      - name: Build the board
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 harness/board/board.py --out "$RUNNER_TEMP/board"
+      - name: Publish to the board branch
+        run: |
+          set -euo pipefail
+          git config user.name "factory-board"
+          git config user.email "factory-board@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin board >/dev/null; then
+            git switch board
+          else
+            git switch --orphan board
+          fi
+          cp "$RUNNER_TEMP/board/BOARD.md" "$RUNNER_TEMP/board/board.json" .
+          git add BOARD.md board.json
+          if git diff --cached --quiet; then
+            echo "Board unchanged."
+          else
+            git commit -m "Board: ${{ github.event_name }}"
+            git push origin board
+          fi
