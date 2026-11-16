@@ -18,13 +18,13 @@ Hard rules for the whole lap (from `FACTORY_RULES.md`):
 1. **Check the start state.** `git status` must be clean and the branch must be `main`, up to date with `origin/main`. If not, stop and say what is in the way.
 2. **Pick the ticket.** Use the id the user gave. If they gave none, ask the product owner skill (`bmad-agent-po`, BOARD) for the next ready ticket in build order and confirm it with the user in one line.
 3. **Read** `MISSION.md`, `FACTORY_RULES.md`, `harness/README.md` and the ticket, in full.
-4. **Irreversible check.** If the ticket needs anything in `FACTORY_RULES.md` section 1 or a protected path, stop. Tell the user which rule applies. Do not build a partial version.
-5. **Branch.** `git switch -c story/<ticket-id>`.
-6. **Build with BMAD.** Invoke the `bmad-build` skill with the ticket. Follow its workflow fully, including its review step. It commits locally. It must not push.
+4. **Branch.** `git switch -c story/<ticket-id>`, then `git push -u origin story/<ticket-id>` at once. The board now shows the lap as started.
+5. **Irreversible check.** If the ticket needs anything in `FACTORY_RULES.md` section 1 or a protected path, stop. Do not build a partial version. Make the stop visible on the board: ask the product owner skill (`bmad-agent-po`, BOARD) to mark the ticket blocked with the rule as the reason (`tickets.py mark <ref> draft --blocked "<rule and why>"`), commit, `git push`. Then tell the user which rule applies.
+6. **Build with BMAD.** Invoke the `bmad-build` skill with the ticket. Follow its workflow fully, including its review step. It commits locally. It must not push. One push is yours: when the plan is approved, commit the plan file if `bmad-build` has not, and `git push`, so the board shows the ticket as building. Then let `bmad-build` continue.
 7. **Local gates.** Run `bash harness/run-gates.sh`.
    - Green: go on.
    - Red: fix the cause in application or test code and run again. At most **3** fix rounds. Still red after 3: stop and report the failing output.
-8. **Push.** `git push -u origin story/<ticket-id>`. Nothing else.
+8. **Push.** `git push`. Nothing else.
 9. **Hand over.** Print, ready to paste:
    - the compare link: `https://github.com/<owner>/<repo>/compare/main...story/<ticket-id>?expand=1` (take owner and repo from `git remote get-url origin`);
    - a pull request title: `<ticket-id>: <ticket title>`;
