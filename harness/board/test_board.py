@@ -140,11 +140,158 @@ class Reviews(unittest.TestCase):
     def test_three_counts(self):
         s = snap([ticket(1)], {"main": [], "story/1": [plan(1, "built", review="thorough", loops=1)]}, ["story/1"],
                  [pull(7, "story/1", checks=GREEN, judged=3, human=1)])
-        self.assertEqual(row(b.derive(s), 1)["reviews"], {"bmad": 2, "fix_rounds": 2, "human": 1})
+        self.assertEqual(row(b.derive(s), 1)["reviews"], {"bmad": 2, "fix_rounds": 2, "human": 1, "findings": None})
 
     def test_no_review_yet(self):
         s = snap([ticket(1)], {"main": [], "story/1": [plan(1, "in-progress")]}, ["story/1"])
-        self.assertEqual(row(b.derive(s), 1)["reviews"], {"bmad": 0, "fix_rounds": 0, "human": 0})
+        self.assertEqual(row(b.derive(s), 1)["reviews"], {"bmad": 0, "fix_rounds": 0, "human": 0, "findings": None})
+
+    def test_passes_and_findings_come_from_the_triage_log(self):
+        p = {**plan(1, "built", review="thorough", loops=0), "review_passes": 2,
+             "findings": {"found": 62, "patched": 27, "deferred": 2}}
+        s = snap([ticket(1)], {"main": [], "story/1": [p]}, ["story/1"])
+        r = row(b.derive(s), 1)
+        self.assertEqual((r["reviews"]["bmad"], r["reviews"]["findings"]["found"]), (2, 62))
+        self.assertIn("| 2/0/0 · 62 found, 27 patched, 2 deferred |", b.render_markdown(b.derive(s)))
+
+
+TRIAGE = """---
+ticket: '1'
+status: built
+---
+
+## Review Triage Log
+
+### Pass 1 — 2026-11-16 — high 0, medium 1
+
+| # | Finding (lens) | Verdict | Route | Evidence |
+|---|---|---|---|---|
+| 1 | Errors get HTML (edge) | medium | bad_plan | Fixed. |
+| 2 | A `a\\|b` gap (gap) | medium | patch | Added a test. |
+| 3 | Odd host (blind) | maybe-false | defer | CI settles it. |
+| 4 | Not a defect (blind) | false | rejected | Descriptive. |
+
+### Pass 2 — 2026-11-17
+
+| # | Finding (lens) | Verdict | Route | Evidence |
+|---|---|---|---|---|
+| 5 | Missing log (edge) | low | patch | Logged. |
+| — | carried: rows 3 raised again | carried | as before | Still holds. |
+
+## Design Notes
+
+| # | Route |
+|---|---|
+| 9 | patch |
+"""
+
+
+class TriageLog(unittest.TestCase):
+    def test_counts_passes_and_routes(self):
+        self.assertEqual(b.triage_log(TRIAGE), (2, {"found": 5, "patched": 3, "deferred": 1}))
+
+    def test_without_a_triage_log(self):
+        self.assertEqual(b.triage_log("---\nticket: '1'\n---\n\n## Intent\n"), (0, None))
+
+    def test_passes_without_a_readable_table(self):
+        self.assertEqual(b.triage_log("## Review Triage Log\n\n### Pass 1\n\nNo findings.\n"), (1, None))
+
+    def test_read_plans_carries_them(self):
+        [p] = b.read_plans({f"{EPIC_PATH}/story-x-plan.md": TRIAGE})
+        self.assertEqual((p["review_passes"], p["findings"]["patched"]), (2, 3))
+
+
+NOW = 1_800_000_000  # 2027-01-15 08:00:00 UTC
+
+
+def at(minutes_ago):
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(NOW - minutes_ago * 60, timezone.utc).isoformat(timespec="seconds")
+
+
+def lap(stage="in-progress", signals=None, branch_time=None, idle=None, quiet=600, here="story/1.1"):
+    t = {**ticket(1), "ref": "1.1"}
+    s = snap([t], {"main": [], "story/1.1": [plan(1, stage)]}, ["story/1.1"])
+    s["now"] = NOW
+    s["signals"] = {"1.1": signals or []}
+    s["branch_times"] = {"story/1.1": NOW - branch_time * 60} if branch_time is not None else {}
+    if idle is not None:
+        s["activity"] = {"branch": here, "idle_seconds": idle * 60, "quiet_seconds": quiet}
+    return row(b.derive(s), 1)
+
+
+class Signals(unittest.TestCase):
+    def test_a_lap_that_waits_needs_you_with_the_reason(self):
+        r = lap(signals=[{"at": at(12), "state": "waiting", "kind": "approval", "text": "Approve the plan"}])
+        self.assertEqual((r["status"], r["needs_you"]), ("needs you", "Approve the plan (approval, waiting 12 min)"))
+        self.assertEqual(r["human_wait"], {"stops": 1, "seconds": 720})
+
+    def test_working_again_ends_the_wait_and_keeps_the_time(self):
+        r = lap(signals=[
+            {"at": at(30), "state": "waiting", "kind": "permission", "text": "Subagents?"},
+            {"at": at(25), "state": "working"},
+            {"at": at(10), "state": "waiting", "kind": "approval", "text": "Approve the plan"},
+            {"at": at(1), "state": "working"},
+        ])
+        self.assertEqual((r["status"], r["needs_you"], r["waiting_for_you"]), ("running", None, None))
+        self.assertEqual(r["human_wait"], {"stops": 2, "seconds": 14 * 60})
+
+    def test_a_newer_commit_makes_a_forgotten_wait_stale(self):
+        r = lap(signals=[{"at": at(20), "state": "waiting", "kind": "approval", "text": "Approve the plan"}], branch_time=5)
+        self.assertEqual((r["status"], r["waiting_for_you"]), ("running", None))
+        self.assertEqual(r["human_wait"]["stops"], 1)
+
+    def test_an_older_commit_does_not(self):
+        r = lap(signals=[{"at": at(5), "state": "waiting", "kind": "choice", "text": "Split the plan?"}], branch_time=20)
+        self.assertEqual(r["status"], "needs you")
+
+    def test_a_wait_comes_before_the_built_ask(self):
+        r = lap("built", signals=[{"at": at(2), "state": "waiting", "kind": "manual-step", "text": "Run gates by hand"}])
+        self.assertEqual(r["needs_you"], "Run gates by hand (manual-step, waiting 2 min)")
+
+    def test_a_wait_on_a_ticket_not_yet_branched(self):
+        t = {**ticket(1), "ref": "1.1"}
+        s = snap([t])
+        s.update(now=NOW, signals={"1.1": [{"at": at(3), "state": "waiting", "kind": "question", "text": "This ticket?"}]})
+        r = row(b.derive(s), 1)
+        self.assertEqual((r["status"], r["needs_you"]), ("needs you", "This ticket? (question, waiting 3 min)"))
+
+    def test_a_done_ticket_ignores_an_open_wait(self):
+        t = {**ticket(1), "ref": "1.1"}
+        s = snap([t], {"main": [plan(1, "done")]})
+        s.update(now=NOW, signals={"1.1": [{"at": at(3), "state": "waiting", "kind": "limit", "text": "x"}]})
+        self.assertEqual(row(b.derive(s), 1)["status"], "done")
+
+    def test_unreadable_times_are_skipped(self):
+        r = lap(signals=[{"at": "yesterday", "state": "waiting", "kind": "limit", "text": "x"}])
+        self.assertEqual((r["status"], r["human_wait"]), ("running", None))
+
+
+class Quiet(unittest.TestCase):
+    def test_no_change_past_the_threshold_is_quiet(self):
+        r = lap(idle=25)
+        self.assertEqual((r["status"], r["needs_you"]), ("quiet", "Quiet for 25 min: look at the session"))
+
+    def test_below_the_threshold_is_running(self):
+        self.assertEqual(lap(idle=9)["status"], "running")
+
+    def test_only_the_branch_checked_out_here(self):
+        self.assertEqual(lap(idle=25, here="main")["status"], "running")
+
+    def test_a_named_wait_is_not_quiet(self):
+        r = lap(idle=25, signals=[{"at": at(25), "state": "waiting", "kind": "approval", "text": "Approve"}])
+        self.assertEqual(r["status"], "needs you")
+        self.assertIsNone(r["quiet_minutes"])
+
+    def test_quiet_wins_over_the_built_ask(self):
+        self.assertEqual(lap("built", idle=15)["status"], "quiet")
+
+    def test_in_ci_is_never_quiet(self):
+        t = {**ticket(1), "ref": "1.1"}
+        s = snap([t], {"main": [], "story/1.1": [plan(1, "built")]}, ["story/1.1"],
+                 [pull(7, "story/1.1", checks={"gates": "running"})])
+        s.update(now=NOW, activity={"branch": "story/1.1", "idle_seconds": 3600, "quiet_seconds": 600})
+        self.assertEqual(row(b.derive(s), 1)["status"], "running")
 
 
 class Problems(unittest.TestCase):

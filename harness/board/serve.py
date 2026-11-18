@@ -3,14 +3,16 @@
 
 Part of the judge. Human-owned. Standard library only (Python 3.11+).
 
-  python harness/board/serve.py [--port 8765] [--root .]
+  python harness/board/serve.py [--port 8765] [--root .] [--quiet-minutes 10]
 
 Then open http://127.0.0.1:8765. It reads what board.py reads: Git (it runs `git fetch`
 every 30 seconds), the BMAD files, and GitHub through your own `gh` login (`gh auth token`)
 or GITHUB_TOKEN. With neither, it shows Git only: no pull requests or checks.
 
 The branch checked out here is read from the working tree, so a running lap shows
-its plan before it is pushed. Nothing here reads the holdouts repository.
+its plan before it is pushed. It also reads the lap's stops from `.lap/<ref>.jsonl`
+(written by lap_signal.py) and shows a running lap as quiet when nothing in the working tree
+has changed for --quiet-minutes. Nothing here reads the holdouts repository.
 """
 import argparse
 import json
@@ -130,6 +132,62 @@ def working_files(root):
     return out
 
 
+ACTIVITY_SECONDS = 30
+SKIP_DIRS = {".git", "node_modules", ".lap"}
+
+
+def read_signals(root, problems):
+    """{ref: [signal, ...]} from `.lap/<ref>.jsonl`, the lap's own record of its stops."""
+    out = {}
+    folder = Path(root) / ".lap"
+    if not folder.is_dir():
+        return out
+    for p in sorted(folder.glob("*.jsonl")):
+        events = []
+        for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+            if not line.strip():
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                problems.append(f"`.lap/{p.name}` line {n} cannot be read.")
+                continue
+            if isinstance(event, dict):
+                events.append(event)
+        out[p.stem] = events
+    return out
+
+
+def newest_change(root):
+    """The newest change time of any file or folder in the working tree, build output included."""
+    newest = 0.0
+    for folder, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        for name in [*files, *dirs]:
+            try:
+                newest = max(newest, os.stat(os.path.join(folder, name)).st_mtime)
+            except OSError:
+                pass  # removed while we looked
+    return newest
+
+
+def branch_times(root):
+    """{branch: newest commit time} for local and remote `story/` branches."""
+    out = {}
+    lines = b.git(root, "for-each-ref", "--format=%(refname:short) %(committerdate:unix)",
+                  "refs/heads/story", "refs/remotes/origin/story").splitlines()
+    for line in lines:
+        name, _, at = line.rpartition(" ")
+        if name and at.isdigit():
+            name = name.removeprefix("origin/")
+            out[name] = max(out.get(name, 0), int(at))
+    return out
+
+
+def minutes(seconds):
+    return f"{int(seconds // 60)} min"
+
+
 def ticket_markdown(t, row):
     """The ticket entry as a document for the drawer."""
     out = [f"# {t['ref']}: {t['title']}", ""]
@@ -145,6 +203,18 @@ def ticket_markdown(t, row):
         out += [f"**Needs you:** {row['needs_you']}", ""]
     if row.get("blocked"):
         out += [f"**Blocked:** {row['blocked']}", ""]
+    if row.get("stops"):
+        out += ["## Stops for you", "",
+                "From the lap's own signals (`.lap/`): what the agent said, not evidence about the work.", "",
+                "| Since | Kind | What was needed | Waited |", "|---|---|---|---|"]
+        for s in row["stops"]:
+            waited = minutes(s["seconds"]) + (" so far" if s["open"] else "")
+            out.append(f"| {s['at']} | {b._cell(s['kind'])} | {b._cell(s['text'])} | {waited} |")
+        hw = row["human_wait"]
+        out += ["", f"{hw['stops']} stop{'s' if hw['stops'] != 1 else ''}, {minutes(hw['seconds'])} in total.", ""]
+    findings = (row.get("reviews") or {}).get("findings")
+    if findings:
+        out += [f"**Reviews:** {row['reviews']['bmad']} BMAD passes, {b.findings_text(findings)}.", ""]
     if t.get("description"):
         out += ["## Description", "", t["description"], ""]
     if t.get("verify"):
@@ -155,10 +225,12 @@ def ticket_markdown(t, row):
 
 
 class Source:
-    def __init__(self, root, repo, gh, server):
+    def __init__(self, root, repo, gh, server, quiet_seconds=600):
         self.root, self.repo, self.gh, self.server = root, repo, gh, server
+        self.quiet_seconds = quiet_seconds
         self.lock = threading.Lock()
         self.fetched = 0.0
+        self.looked = (0.0, 0.0)  # when the working tree was last walked, and its newest change then
         self.cached = (0.0, None, None)  # time, board, snapshot
         self.error = None
 
@@ -191,6 +263,15 @@ class Source:
                 snap["branches"].append(branch)
         dirty = bool(self._git("status", "--porcelain").strip())
         snap["local"] = {"branch": branch, "dirty": dirty, "github": not isinstance(self.gh, NoGitHub)}
+        # The lap's signals, and whether this folder has gone quiet.
+        now = time.time()
+        if now - self.looked[0] > ACTIVITY_SECONDS:
+            self.looked = (now, newest_change(self.root))
+        snap["now"] = now
+        snap["signals"] = read_signals(self.root, snap["problems"])
+        snap["branch_times"] = branch_times(self.root)
+        snap["activity"] = {"branch": branch, "idle_seconds": max(now - self.looked[1], 0),
+                            "quiet_seconds": self.quiet_seconds}
         return snap
 
     def refresh(self):
@@ -295,6 +376,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="Serve the ticket board as a live local page.")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--root", default=".", help="the repository (default: current folder)")
+    ap.add_argument("--quiet-minutes", type=float, default=10,
+                    help="a running lap with no file change for this long shows as quiet (default: 10)")
     args = ap.parse_args(argv)
 
     root = b.git(args.root, "rev-parse", "--show-toplevel").strip()
@@ -305,7 +388,8 @@ def main(argv=None):
     token = gh_token()
     api = os.environ.get("GITHUB_API_URL", "https://api.github.com")
     gh = CachedGitHub(FallbackGitHub(b.GitHub(repo, token, api), repo), GITHUB_SECONDS) if token else NoGitHub(repo)
-    source = Source(root, repo, gh, os.environ.get("GITHUB_SERVER_URL", "https://github.com"))
+    source = Source(root, repo, gh, os.environ.get("GITHUB_SERVER_URL", "https://github.com"),
+                    quiet_seconds=args.quiet_minutes * 60)
     threading.Thread(target=source.run, daemon=True).start()
     httpd = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(source))
     print(f"Board for {repo} at http://127.0.0.1:{args.port}"

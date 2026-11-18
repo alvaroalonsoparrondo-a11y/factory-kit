@@ -66,7 +66,7 @@ The board is one page with a row per ticket: its stage, its status, what it need
 
 - The `board` workflow rebuilds it on every push to `main` or a `story/` branch, on every pull request change, and when a check finishes. To rebuild by hand, run the `board` workflow from the Actions tab.
 - It is built from Git, GitHub and the BMAD files. It stores nothing itself, and the lap agent cannot write to it.
-- Reviews are shown as three numbers: BMAD review passes / fix rounds / human reviews.
+- Reviews are shown as three numbers: BMAD review passes / fix rounds / human reviews. Passes are counted from the plan's Review Triage Log, followed by its findings (found, patched, deferred) when the table can be read.
 - A merged pull request counts as done.
 - Work that is not pushed is not on the board. The lap pushes its branch when it starts, so this is only the first minute of a lap.
 - Anything the board cannot read is listed under "Problems" at the bottom.
@@ -82,6 +82,10 @@ Then open `http://127.0.0.1:8765`. It shows the same tickets as columns of cards
 - It uses your own `gh` login (or `GITHUB_TOKEN`) for pull requests and checks; without either it shows Git only.
 - The branch checked out in this folder is read from the working tree, so a running lap shows its plan before it is pushed.
 - It binds `127.0.0.1` only and never reads the holdouts repository.
+- **A lap that waits for you** goes to "Needs you" with the reason and how long it has waited, for example "Approve the plan (approval, waiting 12 min)". The lap writes this itself with `python harness/board/lap_signal.py` into `.lap/<ticket-id>.jsonl`, so it is the agent's own word, never evidence. A wait is dropped once the branch has a newer commit, or the ticket is done.
+- **Quiet** means the lap on the branch checked out here is not waiting, yet nothing in the folder (build output included) has changed for 10 minutes: look at the session, it may have hit a usage limit, crashed, or be stuck on a permission prompt. Change the threshold with `--quiet-minutes`. A lap in another clone needs its own `serve.py --root <that folder>`.
+- The card's `n stops · m min` is the time the lap said it waited for you. Hover the `B…` chip for the triage log's findings; the drawer lists every stop.
+- The browser tab's title starts with `(!) <n>` while something waits for you.
 
 ## Calibrate the judge
 

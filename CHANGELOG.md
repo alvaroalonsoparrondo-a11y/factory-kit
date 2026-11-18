@@ -2,6 +2,18 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-18 — Lap signals: the live board shows when a running lap needs you
+
+Seen in `factory-pilot`, lap 1.1 (2026-11-16 and 17): seven stops for a human, five of them only in the chat (permission for subagents twice, keep or split an oversized plan, approve the plan) and invisible on both boards. All five reviewers stopped on a usage limit and the lap sat for hours while the board said "In review". The review count showed 2 passes only because BMAD's loop counter, which counts loopbacks, happened to be 1; the 62 findings were not shown.
+
+Changes:
+- **`harness/board/lap_signal.py`** (new). `python harness/board/lap_signal.py <ref> waiting <kind> "<text>"` and `... <ref> working` add a line to `.lap/<ref>.jsonl`. Kinds: `permission`, `choice`, `approval`, `question`, `manual-step`, `limit`, `decision`.
+- **`lap` skill.** One rule: signal `waiting` before any stop for the human, `working` after the answer.
+- **Live board.** A waiting lap goes to "Needs you" with its reason and waiting time; a wait older than the branch's newest commit is ignored. A lap on the checked-out branch with no file change for 10 minutes (`--quiet-minutes`) shows as `quiet`. Cards show stops and total waiting time; the drawer lists the stops; the tab title starts with `(!) <n>`.
+- **Both boards.** Review passes are the `### Pass` headings of the plan's Review Triage Log (fallback: the loop counter), with found / patched (`patch`, `bad_plan`) / deferred counted from its `Route` column.
+
+Design: `docs/superpowers/specs/2026-11-17-ticket-board-v2-design.md`. Tested in `factory-kit`: 60 board tests; the triage logs of `factory-pilot`'s plans (lap 1.1: 2 passes, 62 found, 27 patched, 2 deferred); the live board's derivation on `factory-pilot`'s folder with a hand-made signal. Not tested yet: a real lap with the live board open.
+
 ## 2026-11-18 — Live board, lap opens its pull request, fence off, Java 21 (from `factory-pilot`)
 
 Seen in `factory-pilot`, laps 1.1 and 1.2:

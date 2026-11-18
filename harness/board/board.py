@@ -23,6 +23,7 @@ import time
 import tomllib
 import urllib.error
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 
 CHECKS = ("gates", "protected-paths", "scope-guard", "holdouts")
@@ -118,12 +119,49 @@ def read_tickets(files, problems):
     return tickets
 
 
+PATCHED_ROUTES = ("patch", "bad_plan")
+
+
+def triage_log(text):
+    """(passes, findings) from a plan's `## Review Triage Log`.
+
+    Passes are its `### Pass` headings. Findings are the numbered table rows, counted by their
+    `Route` cell: {"found", "patched", "deferred"}, or None when no table with a Route column is there.
+    BMAD does not fix this layout, so this is best effort.
+    """
+    m = re.search(r"^## Review Triage Log[ \t]*$(.*?)(?=^## |\Z)", text, re.M | re.S)
+    if not m:
+        return 0, None
+    section = m.group(1)
+    passes = len(re.findall(r"^### Pass\b", section, re.M))
+    found = patched = deferred = 0
+    route_at, seen_table = None, False
+    for line in section.splitlines():
+        if not line.startswith("|"):
+            route_at = None
+            continue
+        cells = [c.strip() for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+        if route_at is None:
+            route_at = next((i for i, c in enumerate(cells) if c.lower() == "route"), -1)
+            seen_table = seen_table or route_at >= 0
+            continue
+        if route_at < 0 or route_at >= len(cells) or not re.fullmatch(r"\d+", cells[0]):
+            continue
+        found += 1
+        route = cells[route_at].lower()
+        patched += route in PATCHED_ROUTES
+        deferred += route == "defer"
+    findings = {"found": found, "patched": patched, "deferred": deferred} if seen_table else None
+    return passes, findings
+
+
 def read_plans(files):
     plans = []
     for path in sorted(p for p in files if p.endswith("-plan.md")):
         fm = parse_frontmatter(files[path])
         if not fm.get("ticket"):
             continue
+        passes, findings = triage_log(files[path])
         plans.append({
             "path": path,
             "epic": epic_of(path),
@@ -133,6 +171,8 @@ def read_plans(files):
             "review_loop_iteration": fm.get("review_loop_iteration", "0"),
             "blocked_at": fm.get("blocked_at", ""),
             "blocked_reason": fm.get("blocked_reason", ""),
+            "review_passes": passes,
+            "findings": findings,
         })
     return plans
 
@@ -330,6 +370,7 @@ def derive(snapshot):
         except ValueError:
             loops = 0
         reviewed = bool(plan) and plan["review"] not in ("", "none")
+        passes = plan.get("review_passes", 0) if plan else 0
         rows.append({
             "epic": t["epic"], "id": t["id"], "title": t["title"], "after": t["after"], "hitl": t["hitl"],
             "ref": t.get("ref", t["id"]), "risk": t.get("risk", ""),
@@ -343,20 +384,30 @@ def derive(snapshot):
             "holdout_ids": sorted(set(re.findall(
                 r"H-\d+", (pr["checks"].get("holdouts") or {}).get("description", "")))) if pr else [],
             "reviews": {
-                "bmad": loops + 1 if reviewed else 0,
+                "bmad": passes or (loops + 1 if reviewed else 0),
+                "findings": plan.get("findings") if plan else None,
                 "fix_rounds": max(pr["judged_commits"] - 1, 0) if pr else 0,
                 "human": pr["human_reviews"] if pr else 0,
             } if branch else None,
         })
 
+    now = snapshot.get("now") or time.time()
+    signals = snapshot.get("signals") or {}
+    activity = snapshot.get("activity")
     done = {key(r) for r in rows if r["stage"] == "Done"}
     first_ready = set()  # the first startable ticket of each epic
     for r in rows:
+        r["stops"] = _stops(signals.get(r["ref"], []), now)
+        r["human_wait"] = ({"stops": len(r["stops"]), "seconds": sum(s["seconds"] for s in r["stops"])}
+                           if r["stops"] else None)
+        r["waiting_for_you"] = _open_wait(r, snapshot)
+        r["quiet_minutes"] = _quiet_minutes(r, activity)
         r["waiting_on"] = [a for a in r["after"] if (r["epic"], a) not in done]
         r["needs_you"] = _needs_you(r, snapshot)
         if r["stage"] == "Planned" and not r["waiting_on"] and not r["blocked"] and r["epic"] not in first_ready:
             first_ready.add(r["epic"])
-            r["needs_you"] = "Start the lap" + (" (human in the loop)" if r["hitl"] else "")
+            if not r["waiting_for_you"]:
+                r["needs_you"] = "Start the lap" + (" (human in the loop)" if r["hitl"] else "")
         r["status"] = _status(r)
 
     counts = {}
@@ -371,11 +422,66 @@ def derive(snapshot):
     }
 
 
+QUIET_STAGES = ("Lap started", "Building", "In review", "Built")
+
+
+def _epoch(at):
+    """Seconds since the epoch from an ISO time with a zone, or None."""
+    try:
+        t = datetime.fromisoformat(str(at).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return t.timestamp() if t.tzinfo else None
+
+
+def _stops(events, now):
+    """The lap's stops for a human, from its signals: each `waiting` up to the next `working` (or now)."""
+    stops = []
+    for e in sorted((e for e in events if _epoch(e.get("at")) is not None), key=lambda e: _epoch(e["at"])):
+        at = _epoch(e["at"])
+        if e.get("state") == "waiting":
+            if stops and stops[-1]["open"]:  # a second wait before any answer closes the first one
+                stops[-1].update(open=False, seconds=max(at - stops[-1]["since"], 0))
+            stops.append({"at": e["at"], "since": at, "kind": e.get("kind", ""), "text": e.get("text", ""),
+                          "seconds": max(now - at, 0), "open": True})
+        elif e.get("state") == "working" and stops and stops[-1]["open"]:
+            stops[-1].update(open=False, seconds=max(at - stops[-1]["since"], 0))
+    return stops
+
+
+def _open_wait(r, snapshot):
+    """The stop the lap says it is in now, unless the ticket is finished or the branch moved on since."""
+    if not r["stops"] or not r["stops"][-1]["open"] or r["stage"] in ("Done", "Dropped"):
+        return None
+    stop = r["stops"][-1]
+    committed = (snapshot.get("branch_times") or {}).get(r["branch"]) if r["branch"] else None
+    if committed is not None and committed > stop["since"]:
+        return None
+    return stop
+
+
+def _quiet_minutes(r, activity):
+    """Minutes without a change in the working tree, when this ticket's lap runs here and is not waiting."""
+    if not activity or not r["branch"] or r["branch"] != activity.get("branch"):
+        return None
+    if r["stage"] not in QUIET_STAGES or r["waiting_for_you"] or r["blocked"]:
+        return None
+    idle = activity.get("idle_seconds")
+    if idle is None or idle < activity.get("quiet_seconds", 600):
+        return None
+    return int(idle // 60)
+
+
 def _needs_you(r, snapshot):
     if r["stage"] in ("Done", "Dropped"):
         return None
+    if r["waiting_for_you"]:
+        w = r["waiting_for_you"]
+        return f"{w['text']} ({w['kind']}, waiting {int(w['seconds'] // 60)} min)"
     if r["blocked"]:
         return f"Decide: {r['blocked']}"
+    if r["quiet_minutes"] is not None:
+        return f"Quiet for {r['quiet_minutes']} min: look at the session"
     if r["stage"] == "PR closed":
         return "Closed without merge: decide what happens to the ticket"
     if r["stage"] == "In CI":
@@ -403,8 +509,12 @@ def _status(r):
         return "dropped"
     if r["stage"] == "Done":
         return "done"
+    if r["waiting_for_you"]:
+        return "needs you"
     if r["blocked"]:
         return "blocked"
+    if r["quiet_minutes"] is not None:
+        return "quiet"
     if r["needs_you"]:
         return "needs you"
     if r["stage"] != "Planned":
@@ -418,9 +528,13 @@ def _cell(text):
     return re.sub(r"\s+", " ", str(text)).replace("|", "\\|").strip()
 
 
+def findings_text(f):
+    return f"{f['found']} found, {f['patched']} patched, {f['deferred']} deferred"
+
+
 def render_markdown(board):
     name = board["repo"].split("/")[-1]
-    order = ("needs you", "blocked", "running", "ready", "waiting", "done", "dropped")
+    order = ("needs you", "blocked", "quiet", "running", "ready", "waiting", "done", "dropped")
     summary = " · ".join(f"{board['counts'][s]} {s}" for s in order if board["counts"].get(s))
     out = [f"# Board: {_cell(name)}", "", f"Built from `main` at `{board['main_sha']}`" + (f" · {summary}" if summary else ""), ""]
 
@@ -452,6 +566,8 @@ def render_markdown(board):
                     checks += " " + ", ".join(r["holdout_ids"])
             rv = r["reviews"]
             reviews = f"{rv['bmad']}/{rv['fix_rounds']}/{rv['human']}" if rv else "–"
+            if rv and rv.get("findings"):
+                reviews += " · " + findings_text(rv["findings"])
             pr = f"[#{r['pr']['number']}]({r['pr']['url']})" if r["pr"] else "–"
             out.append(f"| {r['id']} | {_cell(r['title'])} | {r['stage']} | {r['status']} | {needs} | {checks} | {reviews} | {pr} |")
         out.append("")
@@ -461,7 +577,7 @@ def render_markdown(board):
     out += ["", "---", "",
             "Checks, in order: `gates`, `protected-paths`, `scope-guard`, `holdouts` "
             f"({MARK['green']} green, {MARK['red']} red, {MARK['running']} running, {MARK['missing']} not reported). "
-            "Reviews: BMAD review passes / fix rounds / human reviews. "
+            "Reviews: BMAD review passes / fix rounds / human reviews, then the findings in the plan's triage log. "
             "Built by the `board` workflow; do not edit by hand.", ""]
     return "\n".join(out)
 

@@ -187,7 +187,7 @@ async function getJSON(url) {
 
 function column(r) {
   if (r.stage === 'Done' || r.stage === 'Dropped') return 'done'
-  if (r.status === 'blocked' || (r.needs_you && r.stage !== 'Planned')) return 'human'
+  if (r.status === 'blocked' || r.waiting_for_you || (r.needs_you && r.stage !== 'Planned')) return 'human'
   if (r.stage === 'Planned') return 'backlog'
   if (r.stage === 'In CI') return 'ci'
   if (r.stage === 'In review' || r.stage === 'Built') return 'review'
@@ -204,8 +204,10 @@ function card(r) {
   const col = column(r)
   const live = col === 'build' || col === 'review' || col === 'ci'
   const human = col === 'human'
-  const next = r.status === 'needs you' && r.stage === 'Planned'
-  const flag = human ? '<span class="flag">your call</span>'
+  const next = r.status === 'needs you' && r.stage === 'Planned' && !r.waiting_for_you
+  const flag = r.status === 'quiet' ? '<span class="flag">quiet</span>'
+    : r.waiting_for_you ? `<span class="flag" title="the lap's own signal">waiting · ${esc(r.waiting_for_you.kind)}</span>`
+    : human ? '<span class="flag">your call</span>'
     : next ? '<span class="flag go">next</span>'
     : r.status === 'waiting' ? `<span class="flag wait">after ${r.waiting_on.map((a) => esc(refOf(r.epic, a))).join(' ')}</span>`
     : live ? `<span class="flag stage">${esc(r.stage)}</span>` : ''
@@ -216,7 +218,15 @@ function card(r) {
     ? `<div class="checks">${CHECKS.map((c) => `<span class="chip ${esc(r.checks[c])}" title="${esc(c)}: ${esc(r.checks[c])}">${CHECK_LABEL[c]}</span>`).join('')}</div>` : ''
   const meta = []
   if (r.risk) meta.push(`<span class="risk-${esc(r.risk)}">${esc(r.risk)}</span>`)
-  if (r.reviews) meta.push(`<span title="BMAD review passes · fix rounds · human reviews">B${r.reviews.bmad} F${r.reviews.fix_rounds} H${r.reviews.human}</span>`)
+  if (r.reviews) {
+    const f = r.reviews.findings
+    const found = f ? ` · triage log: ${f.found} found, ${f.patched} patched, ${f.deferred} deferred` : ''
+    meta.push(`<span title="BMAD review passes · fix rounds · human reviews${esc(found)}">B${r.reviews.bmad} F${r.reviews.fix_rounds} H${r.reviews.human}</span>`)
+  }
+  if (r.human_wait) {
+    const n = r.human_wait.stops
+    meta.push(`<span title="time the lap said it waited for you">${n} stop${n === 1 ? '' : 's'} · ${Math.floor(r.human_wait.seconds / 60)} min</span>`)
+  }
   if (r.holdout_ids?.length) meta.push(`<span class="risk-high">${r.holdout_ids.map(esc).join(' ')}</span>`)
   const hint = r.needs_you && !next ? `<div class="hint">${inline(r.needs_you)}</div>` : ''
   return `
@@ -252,7 +262,10 @@ function render() {
     $('banner').innerHTML = banner
   }
   $('repo').textContent = board.repo
-  const order = ['needs you', 'blocked', 'running', 'ready', 'waiting', 'done', 'dropped']
+  const order = ['needs you', 'blocked', 'quiet', 'running', 'ready', 'waiting', 'done', 'dropped']
+  // "Start the lap" on a planned ticket is not a call to come back to this tab.
+  const calls = rows.filter((r) => column(r) === 'human').length
+  document.title = calls ? `(!) ${calls} · Factory Board` : 'Factory Board'
   $('totals').textContent = order.filter((s) => board.counts[s]).map((s) => `${board.counts[s]} ${s}`).join(' · ')
 }
 
