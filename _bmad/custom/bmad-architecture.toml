@@ -5,6 +5,6 @@
 persistent_facts = [
   "file:{project-root}/MISSION.md",
   "file:{project-root}/harness/README.md",
-  "The stack is fixed: Java 17 and Spring Boot with Maven in backend/, Angular in frontend/, Playwright in e2e/. The architecture must keep the runtime contract in harness/README.md exactly, and must say how each item is met: start command, health path, build-identity path, state directory, how the jar serves the built frontend, and where docs/openapi.yaml is checked.",
+  "The stack is fixed: Java 21 and Spring Boot with Maven in backend/, Angular in frontend/, Playwright in e2e/. The architecture must keep the runtime contract in harness/README.md exactly, and must say how each item is met: start command, health path, build-identity path, state directory, how the jar serves the built frontend, and where docs/openapi.yaml is checked.",
   "No login, identity or permission design unless MISSION.md puts it in scope and a human has approved it.",
 ]

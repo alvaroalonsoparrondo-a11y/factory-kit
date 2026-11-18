@@ -8,3 +8,10 @@ playwright-report/
 .idea/
 .vscode/
 __pycache__/
+
+# Pull request text the lap writes (never committed)
+.lap/
+
+# BMAD facilitation working files
+.memlog.md
+.template.md

@@ -82,24 +82,38 @@ def bmad_files(root, ref):
 
 
 def read_tickets(files, problems):
-    tickets = []
+    """Every `[[entry]]`, with its ref `<epic id>.<entry id>` when an `[[epic]]` table names its epic's id."""
+    parsed, epic_ids = {}, {}
     for path in sorted(p for p in files if p.endswith("/tickets.toml")):
         try:
-            data = tomllib.loads(files[path])
+            parsed[path] = tomllib.loads(files[path])
         except tomllib.TOMLDecodeError as e:
             problems.append(f"`{path}` cannot be read: {e}")
             continue
+        for epic in parsed[path].get("epic", []):
+            if "slug" in epic and "id" in epic:
+                epic_ids[str(epic["slug"])] = str(epic["id"])
+    tickets = []
+    for path, data in parsed.items():
+        epic = epic_of(path)
         for entry in data.get("entry", []):
             if "id" not in entry:
                 problems.append(f"`{path}` has an entry without an id")
                 continue
+            entry_id = str(entry["id"])
             tickets.append({
-                "epic": epic_of(path),
-                "id": str(entry["id"]),
+                "epic": epic,
+                "id": entry_id,
+                "ref": f"{epic_ids[epic]}.{entry_id}" if epic in epic_ids else entry_id,
                 "title": str(entry.get("title", "")),
                 "after": [str(a) for a in entry.get("after", []) if isinstance(a, (int, str))],
                 "hitl": bool(entry.get("hitl", False)),
                 "risk": str(entry.get("risk", "")),
+                "source": path,
+                "description": str(entry.get("description", "")),
+                "verify": str(entry.get("verify", "")),
+                "covers": [str(c) for c in entry.get("covers", [])],
+                "notes": [str(n) for n in entry.get("notes", [])],
             })
     return tickets
 
@@ -235,8 +249,14 @@ def _plan_for(plans, epic, ticket_id):
 
 
 def _match_branch(branch, tickets, snapshot):
-    """The ticket a `story/<id>` branch belongs to, or None with a reason."""
+    """The ticket a `story/<ref>` branch belongs to, or None with a reason.
+
+    The lap names branches by the ticket's ref (`story/1.2`); a bare entry id (`story/2`) also matches.
+    """
     ticket_id = branch.removeprefix("story/")
+    candidates = [t for t in tickets if t.get("ref") == ticket_id]
+    if candidates:
+        return candidates[0], None
     candidates = [t for t in tickets if t["id"] == ticket_id]
     if len(candidates) == 1:
         return candidates[0], None
@@ -312,6 +332,8 @@ def derive(snapshot):
         reviewed = bool(plan) and plan["review"] not in ("", "none")
         rows.append({
             "epic": t["epic"], "id": t["id"], "title": t["title"], "after": t["after"], "hitl": t["hitl"],
+            "ref": t.get("ref", t["id"]), "risk": t.get("risk", ""),
+            "plan_path": plan["path"] if plan else None,
             "branch": branch,
             "stage": _stage(status, bool(branch), pr),
             "blocked": (plan["blocked_reason"] or "no reason given")

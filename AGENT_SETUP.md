@@ -21,7 +21,7 @@ The kit is two private GitHub template repositories: `OWNER/factory-kit` (the ap
 - Setup only. Do not write `MISSION.md` content, a PRD, tickets, application code, or any hidden scenario.
 - Use HTTPS remotes (`https://github.com/OWNER/<repo>.git`). If a clone or push fails on SSH, switch the remote to HTTPS and retry.
 - End every commit message with the co-author line your environment tells you to use.
-- Run from a session opened in DIRECTORY, not inside an existing factory project: that project's fence would block this setup. If you find yourself blocked by a fence, stop and tell the person.
+- Run from a session opened in DIRECTORY, not inside an existing factory project: that project's rules would apply to this setup. If you find yourself blocked by a permission rule, stop and tell the person.
 
 ## Step 1: Preflight
 
@@ -52,7 +52,7 @@ bash init-project.sh PROJECT
 **Check:**
 - No file contains a placeholder (two underscores, then `OWNER`, `PROJECT` or `PARENT_DIR`, then two underscores), except `MODIFYING.md`, which explains them.
 - Both `init-project.sh` files are gone. In `PROJECT`, `README.md` is now a short project page, and the kit-only files `AGENT_SETUP.md`, `CHANGELOG.md` and `PROJECT_README.md` are gone. Keep following the copy of these instructions you already read.
-- The JSON file in `PROJECT/.claude/` parses, and its deny list names `PROJECT-holdouts`.
+- The JSON file in `PROJECT/.claude/` parses. Its deny list is empty: the fence is off, and the rules in `FACTORY_RULES.md` and `CLAUDE.md` bind the agent instead.
 
 Commit in each repository ("Fill in project names") and push.
 
@@ -115,8 +115,7 @@ Give the person a short report:
 3. What is left for them, with exact instructions:
    - Create two fine-grained tokens and store them as secrets (the tokens step in `RUNBOOK.md`): `HOLDOUTS_DISPATCH_TOKEN` in `PROJECT`, `APP_REPO_TOKEN` in `PROJECT-holdouts`.
    - Branch protection, if step 7 is open.
-   - In a **new** session opened inside `PROJECT`: ask it to edit `MISSION.md` and confirm it is refused. That proves the fence is active.
    - Plan the product with BMAD, fill in `MISSION.md` themselves, write hidden scenarios in a separate session opened in `PROJECT-holdouts`, then say "run a lap".
 4. Anything that surprised you, or that this file or the kit's other documents got wrong, so the kit can be fixed.
 
-Then tell the person to close this session. Laps run in a fresh session opened inside the project folder, so the fence applies.
+Then tell the person to close this session. Laps run in a fresh session opened inside the project folder, so its `CLAUDE.md` and rules apply.

@@ -1,6 +1,6 @@
 ---
 name: lap
-description: 'Runs one factory lap: takes exactly one ticket from the BMAD board through build, review and local gates, and pushes a branch for a human to open as a pull request. Use when the user says "run a lap", "lap <ticket id>", "next ticket", pastes a failing check from a lap pull request, or says a lap pull request was merged.'
+description: 'Runs one factory lap: takes exactly one ticket from the BMAD board through build, review and local gates, pushes a branch and opens its pull request for a human to merge. Use when the user says "run a lap", "lap <ticket id>", "next ticket", pastes a failing check from a lap pull request, or says a lap pull request was merged.'
 ---
 
 # Lap
@@ -9,8 +9,8 @@ One ticket, one branch, one pull request. You build; CI judges; a human merges. 
 
 Hard rules for the whole lap (from `FACTORY_RULES.md`):
 
-- Never edit a protected path. Never weaken a test. Never look for the holdouts.
-- Never use `gh`. Never open, label, approve or merge a pull request.
+- Never change a factory file during a lap. Never weaken a test. Never look for the holdouts.
+- Open the lap's pull request with `gh`. Never label, approve or merge a pull request; a human merges.
 - If you cannot finish within the limits below, stop and report. A stopped lap is a correct result.
 
 ## A. New lap
@@ -25,11 +25,14 @@ Hard rules for the whole lap (from `FACTORY_RULES.md`):
    - Green: go on.
    - Red: fix the cause in application or test code and run again. At most **3** fix rounds. Still red after 3: stop and report the failing output.
 8. **Push.** `git push`. Nothing else.
-9. **Hand over.** Print, ready to paste:
-   - the compare link: `https://github.com/<owner>/<repo>/compare/main...story/<ticket-id>?expand=1` (take owner and repo from `git remote get-url origin`);
-   - a pull request title: `<ticket-id>: <ticket title>`;
-   - the pull request body, filling in every part of `.github/pull_request_template.md`: the ticket, what changed, the local gate result with the candidate id it printed, each assumption made on an open question in `MISSION.md`, and anything deferred.
-   
+9. **Hand over.** Write the pull request text to `.lap/<ticket-id>-pr.md`. Git ignores `.lap/`; never commit it.
+   - First line: the title, `<ticket-id>: <ticket title>`. Then one blank line.
+   - Then the body, filling in every part of `.github/pull_request_template.md`: the ticket, what changed, the local gate result with the candidate id it printed, each assumption made on an open question in `MISSION.md`, and anything deferred.
+
+   Open the pull request from that file: `gh pr create --base main --head story/<ticket-id> --title "<title>" --body-file <a copy of the file without its first two lines>`. Print the pull request's URL.
+
+   If `gh` fails, print its error, the path of the file, and a link that opens the pull request form already filled in: `https://github.com/<owner>/<repo>/compare/main...story/<ticket-id>?expand=1&title=<title>&body=<body>`, with the title and body URL-encoded (take owner and repo from `git remote get-url origin`). If that link would be longer than 8000 characters, print it without `title` and `body` and say to paste them from the file.
+
    Then stop. The lap now waits for CI and the human.
 
 ## B. Fix round (the user pastes a failing check)
