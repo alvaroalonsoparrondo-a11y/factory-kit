@@ -2,6 +2,17 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-19 — Laps in worktrees, and the dispatcher (from `factory-pilot`)
+
+Seen in `factory-pilot`, laps 1.3 and 1.6: the first parallel laps had to run in two full clones, because the lap required `main` checked out, and the lap had no step for a branch that falls behind `main`. The live board then lost sight of a lap running in a worktree: it read only its own folder live, so the lap looked frozen at its last push, its lap signals were never read, and one running lap kept every other one looking busy. Across laps 1.1 to 1.6 the human was also the event source and the orchestrator: picking, starting, pasting red checks, saying `merged`, and remembering follow-ups.
+
+- **`lap` skill:** a lap runs in the main checkout or a worktree, branching from `origin/main`; gates run on a port (given, else `PORT`, else 8080 in the main checkout and 8081 in a worktree); new section D, "main moved" (merge, never rebase); section C works from a worktree. A dispatched lap finds its branch claimed, signals and ends where it would ask, and leaves C to the dispatcher.
+- **Live board (`serve.py`, `board.py`):** reads plans and `.lap/` signals from every worktree, judges quiet per `story/*` worktree, skips nested worktrees when scanning, and reads a lap's pull request text from its own tree.
+- **`harness/dispatch/dispatch.py` (new, with tests):** a local poller that claims a ready ticket once (creates `story/<ref>` on GitHub), gives it its own worktree and port, routes fix rounds (for every required check except the guards, as `board.py` lists them) and "main moved" rounds, and closes merged laps (mark done on `main`, remove the worktree, lap report line). `--no-agents` leaves every lap to a human (the shape for interactive-only agents such as Kiro); headless laps use `--permission-mode dontAsk` with an allow list and are refused while the fence is off. One pass at a time, `pause`, hung-lap reports and usage-limit resumes come from the Archon factory's live runs.
+- **Planning:** tickets may carry `touches`, epic `shared` files and `[[entry.post_merge]]` actions; `bmad-agent-po.toml` asks for them. `.gitattributes` merges `deferred-work.md` with `union` and is now a factory file.
+
+Tested in `factory-pilot`: board, serve and dispatcher unit tests; dry runs of the dispatcher on the pilot. In the kit, rebuilt on the holdouts removal: the same tests pass (the holdouts fix-round test is skipped, since the kit has no `holdouts` check). Not tested yet: a real dispatched lap, a real claim, closing a lap on GitHub.
+
 ## 2026-11-19 — The fence is back on (from `factory-pilot`)
 
 Seen in `factory-pilot`: the fence came off on 2026-11-18 to make factory changes faster during the proof of concept. Once the dispatcher could run laps headless, an empty deny list meant such a lap had no guard at all, and the rules bound the agent by instruction only.

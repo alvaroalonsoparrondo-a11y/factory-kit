@@ -13,7 +13,7 @@ The factory files have the same paths in both. That is what makes a change easy 
 
 ```
 FACTORY_RULES.md   CLAUDE.md   RUNBOOK.md   MODIFYING.md   AGENT_SETUP.md
-harness/           .github/    _bmad/custom/
+harness/           .github/    _bmad/custom/   .gitattributes
 .claude/settings.json          .claude/skills/lap/
 ```
 

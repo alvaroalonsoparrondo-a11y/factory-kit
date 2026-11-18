@@ -95,6 +95,61 @@ class LocalFiles(unittest.TestCase):
             os.utime(self.root / d, (old, old))
         self.assertEqual(s.newest_change(self.root), new)
 
+    def test_newest_change_leaves_out_a_nested_worktree(self):
+        old, new = 1_700_000_000, 1_700_000_500
+        lap = self.root / ".claude" / "worktrees" / "lap"
+        lap.mkdir(parents=True)
+        (lap / ".git").write_text("gitdir: elsewhere", encoding="utf-8")
+        (lap / "busy.txt").write_text("x", encoding="utf-8")
+        os.utime(lap / "busy.txt", (new, new))
+        (self.root / "a.txt").write_text("x", encoding="utf-8")
+        for p in (self.root / "a.txt", lap / ".git", lap, lap.parent, lap.parent.parent):
+            os.utime(p, (old, old))
+        self.assertEqual(s.newest_change(self.root), old)
+        self.assertEqual(s.newest_change(lap), new)
+
+    def test_signals_from_several_working_trees_are_merged(self):
+        other = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, other, True)
+        for folder, line in ((self.root, '{"at": "t1", "state": "working"}'), (other, '{"at": "t2", "state": "working"}')):
+            (folder / ".lap").mkdir()
+            (folder / ".lap" / "1.3.jsonl").write_text(line + "\n", encoding="utf-8")
+        out = s.read_signals(self.root, [])
+        s.read_signals(other, [], out)
+        self.assertEqual([e["at"] for e in out["1.3"]], ["t1", "t2"])
+
+
+class Worktrees(unittest.TestCase):
+    def test_story_branches_in_worktrees_are_found(self):
+        with tempfile.TemporaryDirectory() as main, tempfile.TemporaryDirectory() as lap:
+            porcelain = "\n".join([
+                f"worktree {main}", "HEAD aaa", "branch refs/heads/main", "",
+                f"worktree {lap}", "HEAD bbb", "branch refs/heads/story/1.3", "",
+                f"worktree {lap}-gone", "HEAD ccc", "branch refs/heads/story/1.6",
+                "prunable gitdir file points to non-existent location", "",
+                f"worktree {main}-detached", "HEAD ddd", "detached", ""])
+            self.assertEqual(s.parse_worktrees(porcelain), {"story/1.3": lap})
+
+    def test_a_lap_in_another_worktree_is_read_from_its_working_tree(self):
+        with tempfile.TemporaryDirectory() as main, tempfile.TemporaryDirectory() as lap:
+            (Path(lap) / "plan.md").write_text("live", encoding="utf-8")
+            src = s.Source(main, "o/r", s.NoGitHub("o/r"), "")
+            listing = "\n".join([f"worktree {main}", "branch refs/heads/main", "",
+                                 f"worktree {lap}", "branch refs/heads/story/1.3", ""])
+
+            def git(*args):
+                if args[:2] == ("worktree", "list"):
+                    return listing
+                if args[:2] == ("rev-parse", "--abbrev-ref"):
+                    return "main\n"
+                raise RuntimeError("not faked")
+
+            src._git = git
+            self.assertEqual(src.live_trees(), {"story/1.3": lap, "main": main})
+            self.assertEqual(src._read("story/1.3", "plan.md"), "live")
+            # Not checked out anywhere: read from origin, which this fake refuses.
+            self.assertIsNone(src._read("story/1.6", "plan.md"))
+
 
 if __name__ == "__main__":
     unittest.main()

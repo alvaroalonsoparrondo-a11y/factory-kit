@@ -44,6 +44,73 @@ In an agent session opened in this folder:
    - Red: copy the failing check's name and output, paste it into the session.
 4. After the walking skeleton merges: commit an empty `harness/skeleton.lock` (a factory change, by you).
 
+### A big lap in a worktree
+
+To keep working in this folder while a big lap runs, start the lap in a Claude Code session that has its own worktree (in the desktop app, a new session with a worktree) and say `lap <ticket id>` there. The lap branches `story/<ticket id>` from `origin/main`, runs its gates on port 8081 (8080 stays free for you), and opens its pull request as usual. Then:
+
+- If you push to `main` while it runs, it merges `origin/main` into its branch before it pushes. Tell it `main moved` if its pull request falls behind later.
+- After you merge, tell that session `merged`. It marks the ticket done straight onto `main`. Archive the session to remove the worktree.
+- The first gate run in a new worktree is slow: it has its own `node_modules` and `backend/target`.
+
+### The dispatcher: laps claimed, routed and closed for you
+
+`harness/dispatch/dispatch.py` is the factory's queue and orchestrator. It is a local script: it cannot receive webhooks, so it polls. Each pass reads the tickets the way the live board does (Git, GitHub, every worktree, lap signals, quiet time) and then:
+
+- **claims** each ready ticket once, by creating `story/<ref>` on GitHub (if the branch already exists, someone else has the ticket and it is skipped), and checks it out in its own worktree, `<parent>/__PROJECT__-wt/story-<ref>`, with its own gate port (8091, 8092, …);
+- **starts** the lap there, headless (`claude -p "lap <ref>"`), or, with `--no-agents`, tells you to start it;
+- **routes** what happens next: a red `gates` gets a fix round with the check's output, a pull request behind `main` gets a "main moved" round, a red guard and a green pull request go to you;
+- **closes** a merged lap: marks the ticket done on `main` (as the lap's section C does), pulls `main` in the main checkout if it is clean and on `main`, removes the worktree, and writes a lap report line.
+
+A ticket is ready when every ticket in its `after` is merged and their post-merge actions are done, it has no `story/<ref>` branch, it is not blocked or human-in-the-loop, and its `touches` do not overlap a lap in flight. **A ticket without `touches` runs alone**, so give tickets `touches` (the product owner does this when slicing) before you expect parallel laps. At most two headless laps run at once (`--cap`).
+
+**Two ways to run it:**
+
+- `--no-agents`: the dispatcher claims, sets up the worktree, routes and closes; you run each lap in a Claude Code session in that worktree and paste what it tells you (`lap 1.4`, `lap 1.4 fix round`, `lap 1.4 main moved`). This is the shape that carries to work, where Kiro runs interactively only.
+- Headless: the dispatcher also runs the laps. It refuses while the fence is off (`.claude/settings.json` denies nothing, as now), because a headless lap would then have no guard at all. Turn the fence on, or pass `--allow-no-fence` knowingly. With a fence, `python harness/dispatch/dispatch.py verify-fence` checks that a headless lap obeys it: it runs the exact command the dispatcher uses (`--permission-mode dontAsk` with an allow list, never `bypassPermissions`) on a scratch repository and expects a refused edit to `harness/`, a refused write to `.claude/settings.json`, a refused force push, and an allowed ordinary edit.
+
+**One-time:**
+
+1. GitHub access: `gh auth login` is enough (the dispatcher uses `gh auth token`, or `FACTORY_DISPATCH_TOKEN` / `GITHUB_TOKEN` if set: a fine-grained token for this repository with Contents read and write, Pull requests, Commit statuses, Checks and Actions read). None of these reaches a lap's environment.
+2. Settings → Branches → the rule for `main` → tick **Require branches to be up to date before merging**. Without it, two parallel laps can each be green against an older `main` and break it together; with it, a pull request that falls behind gets a "main moved" round.
+
+**Start and stop** (from any checkout; state lives in the main checkout):
+
+```powershell
+python harness/dispatch/dispatch.py tick --dry-run --no-agents
+```
+
+```powershell
+python harness/dispatch/dispatch.py tick --loop 5 --no-agents
+```
+
+- `--dry-run` reads everything and prints what a pass would do; it claims, starts and writes nothing.
+- `--loop 5` makes a pass every 5 minutes; Ctrl+C stops it. Headless laps already started keep running; the next pass picks them up. Only one pass runs at a time (a lock), so a manual `tick` beside a loop is safe.
+- `pause` / `unpause`: no new laps, while laps in flight are still routed and closed.
+- `release <ref>`: route a lap again after you dealt with what stopped it. `forget <ref>`: drop it from the dispatcher's memory (branch and worktree stay).
+
+**What it keeps** (under `.factory/` in the main checkout, ignored by Git through its own `.gitignore`): `dispatch-state.json` (laps in flight: port, worktree, stage, session id, fix rounds, failed checks), `logs/<ref>-<nn>-<stage>.log` (one per headless stage), `lap-reports.log` (one line per closed lap: pull request, fix rounds, which checks failed, main-moved rounds, usage-limit pauses; the numbers "What to record" asks for).
+
+**Needs you** ends every pass:
+
+- a lap that stopped for you (its `lap_signal.py` wait), with the command to open its session: `claude --resume <session id>` in its worktree;
+- a lap that is quiet for an hour while its process runs (it may have hung; end the process to stop it);
+- stopped laps, never retried until you `release` them: an error exit, no push, a fix round that pushed nothing, still red after 3 fix rounds, a blocked ticket;
+- a red guard (label it or send it back), and green pull requests to review and merge;
+- ready human-in-the-loop tickets, and laps you started by hand (reported, never touched);
+- post-merge actions (below).
+
+A usage limit or an outage is not a stop: the lap's session is resumed 30 minutes later (up to six times), and it does not count as a fix round.
+
+**Post-merge actions.** A ticket may carry steps a human takes after its merge; until each check holds, it is listed under "Needs you" and the tickets after it wait:
+
+```toml
+[[entry.post_merge]]
+what = "commit empty harness/skeleton.lock (judge change, label human-judge-change)"
+done_when = "file:harness/skeleton.lock"
+```
+
+`file:<path>` (the file is on `origin/main`) is the only check so far. The product owner adds `post_merge`, `touches` and the epic's `shared` files when slicing (`_bmad/custom/bmad-agent-po.toml`).
+
 ## Follow the tickets
 
 The board is one page with a row per ticket: its stage, its status, what it needs from you, and how often it was reviewed. Open `BOARD.md` on the `board` branch:
@@ -69,7 +136,7 @@ Then open `http://127.0.0.1:8765`. It shows the same tickets as columns of cards
 - The branch checked out in this folder is read from the working tree, so a running lap shows its plan before it is pushed.
 - It binds `127.0.0.1` only.
 - **A lap that waits for you** goes to "Needs you" with the reason and how long it has waited, for example "Approve the plan (approval, waiting 12 min)". The lap writes this itself with `python harness/board/lap_signal.py` into `.lap/<ticket-id>.jsonl`, so it is the agent's own word, never evidence. A wait is dropped once the branch has a newer commit, or the ticket is done.
-- **Quiet** means the lap on the branch checked out here is not waiting, yet nothing in the folder (build output included) has changed for 10 minutes: look at the session, it may have hit a usage limit, crashed, or be stuck on a permission prompt. Change the threshold with `--quiet-minutes`. A lap in another clone needs its own `serve.py --root <that folder>`.
+- **Quiet** means a lap is not waiting, yet nothing in the working tree it runs in (this folder or its worktree, build output included) has changed for 10 minutes: look at the session, it may have hit a usage limit, crashed, or be stuck on a permission prompt. Change the threshold with `--quiet-minutes`. A lap in a separate clone, not a worktree, needs its own `serve.py --root <that folder>`.
 - The card's `n stops · m min` is the time the lap said it waited for you. Hover the `B…` chip for the triage log's findings; the drawer lists every stop.
 - The browser tab's title starts with `(!) <n>` while something waits for you.
 

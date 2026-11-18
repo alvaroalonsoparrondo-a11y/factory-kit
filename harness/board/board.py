@@ -114,6 +114,11 @@ def read_tickets(files, problems):
                 "verify": str(entry.get("verify", "")),
                 "covers": [str(c) for c in entry.get("covers", [])],
                 "notes": [str(n) for n in entry.get("notes", [])],
+                # What the lap will change; None when the entry does not say (the dispatcher runs it alone).
+                "touches": [str(p) for p in entry["touches"]] if isinstance(entry.get("touches"), list) else None,
+                # Steps a human takes after the merge, each with a check the dispatcher can run.
+                "post_merge": [{"what": str(a.get("what", "")), "done_when": str(a.get("done_when", ""))}
+                               for a in entry.get("post_merge", []) if isinstance(a, dict)],
             })
     return tickets
 
@@ -458,12 +463,15 @@ def _open_wait(r, snapshot):
 
 
 def _quiet_minutes(r, activity):
-    """Minutes without a change in the working tree, when this ticket's lap runs here and is not waiting."""
-    if not activity or not r["branch"] or r["branch"] != activity.get("branch"):
+    """Minutes without a change in the working tree the ticket's branch is checked out in, while it is not waiting.
+
+    `activity` is {"quiet_seconds": n, "idle_seconds": {branch: seconds}}, one entry per working tree.
+    """
+    if not activity or not r["branch"]:
         return None
     if r["stage"] not in QUIET_STAGES or r["waiting_for_you"] or r["blocked"]:
         return None
-    idle = activity.get("idle_seconds")
+    idle = (activity.get("idle_seconds") or {}).get(r["branch"])
     if idle is None or idle < activity.get("quiet_seconds", 600):
         return None
     return int(idle // 60)
