@@ -1,6 +1,6 @@
 # Board: factory-kit
 
-Built from `main` at `d3a6f0e`
+Built from `main` at `9d29f7f`
 
 No tickets yet. The board fills in once a `tickets.toml` is on `main`.
 
@@ -14,4 +14,4 @@ None.
 
 ---
 
-Checks, in order: `gates`, `protected-paths`, `scope-guard`, `holdouts` (✅ green, ❌ red, ⏳ running, ➖ not reported). Reviews: BMAD review passes / fix rounds / human reviews. Built by the `board` workflow; do not edit by hand.
+Checks, in order: `gates`, `protected-paths`, `scope-guard`, `holdouts` (✅ green, ❌ red, ⏳ running, ➖ not reported). Reviews: BMAD review passes / fix rounds / human reviews, then the findings in the plan's triage log. Built by the `board` workflow; do not edit by hand.
