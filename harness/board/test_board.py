@@ -153,6 +153,14 @@ class Problems(unittest.TestCase):
         self.assertEqual(row(board, 1)["stage"], "Lap started")
         self.assertIn("unknown status `wip`", board["problems"][0])
 
+    def test_a_branch_named_by_the_ticket_ref_matches(self):
+        t1, t2 = {**ticket(1), "ref": "1.1"}, {**ticket(2), "ref": "1.2"}
+        s = snap([t1, t2], branches=["story/1.2"], pulls=[pull(9, "story/1.2", checks=GREEN)])
+        board = b.derive(s)
+        self.assertEqual(board["problems"], [])
+        self.assertEqual(row(board, 2)["pr"]["number"], 9)
+        self.assertEqual(row(board, 1)["branch"], None)
+
     def test_branch_for_no_ticket(self):
         board = b.derive(snap([ticket(1)], branches=["story/99"]))
         self.assertEqual(board["problems"], ["Branch `story/99` matches no ticket."])
@@ -216,6 +224,14 @@ class Reading(unittest.TestCase):
         self.assertIn("broken", problems[0])
         plans = b.read_plans(files)
         self.assertEqual((plans[0]["epic"], plans[0]["ticket"], plans[0]["status"]), (EPIC, "1", "built"))
+
+    def test_ticket_ref_comes_from_the_epic_table(self):
+        files = {
+            "_bmad-output/init/tickets/tickets.toml": f'[[epic]]\nid = 3\nslug = "{EPIC}"\n',
+            f"{EPIC_PATH}/tickets.toml": '[[entry]]\nid = 2\ntitle = "Redirect"\nnotes = ["n1"]\n',
+        }
+        [t] = b.read_tickets(files, [])
+        self.assertEqual((t["ref"], t["notes"], t["source"]), ("3.2", ["n1"], f"{EPIC_PATH}/tickets.toml"))
 
     def test_check_state(self):
         self.assertEqual(b.check_state("in_progress", None), "running")

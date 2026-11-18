@@ -2,7 +2,7 @@
 
 How to set up this project and run laps. To change the factory itself, see [MODIFYING.md](MODIFYING.md).
 
-You drive the factory by hand at three points: you start each lap, you open the pull request in the browser, and you paste red checks back. The agent never uses `gh`.
+You drive the factory by hand at three points: you start each lap, you merge the pull request the lap opens, and you paste red checks back. The agent uses `gh` only to open a lap's pull request; it never labels, approves or merges one.
 
 ## One-time setup
 
@@ -18,7 +18,7 @@ You drive the factory by hand at three points: you start each lap, you open the 
    ```
 
    Then, in a Claude Code session here, say `bmad setup`. Commit what it created (`.claude/skills/`, `_bmad/`).
-3. **Check the fence.** `.claude/settings.json` must exist and name this project's `-holdouts` folder. In a Claude Code session here, ask it to edit `MISSION.md`; it must be refused.
+3. **Check the settings.** `.claude/settings.json` must exist and parse. Its deny list is empty: the fence is off, and the agent is bound by `FACTORY_RULES.md` and `CLAUDE.md` instead (see `CHANGELOG.md`, 2026-11-18).
 4. **Create two fine-grained tokens** (GitHub → Settings → Developer settings). Create them yourself; never give them to the agent.
 
    | Token | Repository access | Permissions | Store as |
@@ -52,7 +52,7 @@ Open a **different** agent session in the `-holdouts` folder. Give it the PRD an
 In an agent session opened in this folder:
 
 1. Say `run a lap` (or `lap <ticket id>`).
-2. When it stops, open the compare link it printed, paste the title and body, create the pull request.
+2. When it stops, it has opened the pull request and printed its URL. If `gh` failed, it printed a link that opens the form filled in (the text is also in `.lap/<ticket id>-pr.md`): open it and create the pull request.
 3. Watch the four checks.
    - All green: merge, then tell the session `merged`.
    - Red: copy the failing check's name and output, paste it into the session. For `holdouts`, paste only the status line (`failed: H-03`).
@@ -71,6 +71,18 @@ The board is one page with a row per ticket: its stage, its status, what it need
 - Work that is not pushed is not on the board. The lap pushes its branch when it starts, so this is only the first minute of a lap.
 - Anything the board cannot read is listed under "Problems" at the bottom.
 
+### The live board on your machine
+
+```bash
+python harness/board/serve.py
+```
+
+Then open `http://127.0.0.1:8765`. It shows the same tickets as columns of cards (Backlog, Build, Review, CI, Needs you, Done), refreshes every few seconds, and opens a ticket's entry, plan, epic and pull request text when you click its card.
+
+- It uses your own `gh` login (or `GITHUB_TOKEN`) for pull requests and checks; without either it shows Git only.
+- The branch checked out in this folder is read from the working tree, so a running lap shows its plan before it is pushed.
+- It binds `127.0.0.1` only and never reads the holdouts repository.
+
 ## Calibrate the judge
 
 After two or three tickets, add deliberate defects (see `harness/mutations/README.md`) and run the `calibrate` workflow from the Actions tab, or `bash harness/calibrate.sh` locally.
@@ -81,5 +93,5 @@ Per lap: fix rounds; which check failed; whether a hidden scenario caught someth
 
 ## Limits to keep in mind
 
-- The fence is a guard rail. A shell command can still read or write a denied path. The real enforcement is the four required checks.
-- The workflows assume Java 17 + Spring Boot + Maven in `backend/`, Angular in `frontend/`, Playwright in `e2e/`.
+- There is no fence: the deny list is empty, so the rules bind the agent only by instruction. The real enforcement is the four required checks.
+- The workflows assume Java 21 + Spring Boot + Maven in `backend/`, Angular in `frontend/`, Playwright in `e2e/`.

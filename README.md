@@ -20,7 +20,7 @@ This repository is a **template**. It holds only the factory, no product. Its pa
 | Constitution and rules | `MISSION.md` (template), `FACTORY_RULES.md` | nothing |
 | The judge | `harness/`, `.github/workflows/` | Spring + Angular + Playwright; GitHub Actions |
 | BMAD rules | `_bmad/custom/`, `skills-lock.json` | BMAD v7 |
-| Agent set-up | `CLAUDE.md`, `.claude/settings.json` (the fence), `.claude/skills/lap/` (the lap) | Claude Code |
+| Agent set-up | `CLAUDE.md`, `.claude/settings.json` (permissions; the deny list is empty), `.claude/skills/lap/` (the lap) | Claude Code |
 | Project plumbing | `.github/CODEOWNERS`, `.github/pull_request_template.md` | GitHub |
 
 BMAD's own skills are **not** in the kit. Each project installs them, so the kit stays small and BMAD upgrades stay separate from factory changes.
@@ -38,7 +38,7 @@ BMAD's own skills are **not** in the kit. Each project installs them, so the kit
 
 Instead of the manual steps above, hand the setup to an agent. The steps live in [AGENT_SETUP.md](AGENT_SETUP.md); the prompt only says who, what and where.
 
-1. Open an agent session (Claude Code) in the **parent folder** where the new project should be cloned. Do not use a session opened inside an existing factory project: its fence would block the setup.
+1. Open an agent session (Claude Code) in the **parent folder** where the new project should be cloned. Do not use a session opened inside an existing factory project: its rules would apply to the setup.
 2. The machine needs `git`, `gh` (signed in, with the `repo` and `workflow` scopes), Node, `uv`, and Git Bash on Windows.
 3. Fill in the three values and send this prompt:
 
@@ -59,7 +59,7 @@ Setup only: do not write the mission, a PRD, tickets, code or hidden scenarios.
 
 Add your own rules as extra lines at the end of the prompt. To change how setup works for everyone, change `AGENT_SETUP.md` (see [MODIFYING.md](MODIFYING.md)), not the prompt.
 
-After the agent finishes, close that session. Laps always run in a fresh session opened inside the project folder, so the fence applies.
+After the agent finishes, close that session. Laps always run in a fresh session opened inside the project folder, so its `CLAUDE.md` and rules apply.
 
 ## Status
 

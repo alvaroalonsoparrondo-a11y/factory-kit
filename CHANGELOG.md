@@ -2,6 +2,25 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-18 — Live board, lap opens its pull request, fence off, Java 21 (from `factory-pilot`)
+
+Seen in `factory-pilot`, laps 1.1 and 1.2:
+- The board reported "Branch `story/1.1` matches no ticket". The lap names branches by the ticket's ref (`<epic id>.<entry id>`) and the board matched the entry id alone, so a running lap and its pull request never showed on their ticket.
+- Following a lap meant reading files by hand; `BOARD.md` only updates through CI and has no detail.
+- The human created every pull request by hand, copying the title and body out of the chat.
+- Every factory change needed a hand-made judge pull request, because the fence blocked each agent edit to a factory file. For a proof of concept this cost more time than it saved.
+- The project moved to Java 21; the BMAD architecture config still said Java 17.
+
+Changes:
+- **Board matches lap branches.** `board.py` reads each epic's id from the `[[epic]]` table, gives every ticket its ref and matches `story/<ref>` first (a bare id still matches). Rows also carry `ref`, `risk` and `plan_path`.
+- **Live board.** `harness/board/serve.py` and `dashboard.html` serve a local page (`python harness/board/serve.py`, then `http://127.0.0.1:8765`): columns of cards, and a drawer with each ticket's entry, plan, epic and pull request text. It reuses `board.py`, reads the checked-out branch from the working tree, caches GitHub for 60 s, and falls back to `gh api` when Python cannot verify GitHub's certificate (seen on Windows). `.claude/launch.json` starts it from the Claude desktop app.
+- **The lap opens its pull request.** At the hand-over the lap writes the text to `.lap/<ticket id>-pr.md` (ignored by Git) and runs `gh pr create`; if `gh` fails it prints a link that opens the form filled in. A human still merges.
+- **Fence off.** `.claude/settings.json` has an empty deny list. Outside a lap the agent may change factory files when the human asks, and factory changes may go straight to `main`. A lap still never changes factory files, weakens a test or reads the holdouts, and never labels, approves or merges. The setup checks in `AGENT_SETUP.md` and `RUNBOOK.md` no longer test that `MISSION.md` edits are refused.
+- **Java 21.** The `gates` and `calibrate` workflows, `CLAUDE.md` and the RUNBOOK.
+- **The BMAD config no longer names the stack.** `_bmad/custom/bmad-architecture.toml` restated "Java 17 and Spring Boot…" and was missed when the pilot changed stack. It now loads `CLAUDE.md` and says the stack is the one its Layout line names, so a stack change touches `CLAUDE.md` and the workflows, never `_bmad/custom`.
+
+Tested in `factory-pilot`: 34 board tests; the live board on the real repository (PR #5 linked to 1.1, the drawer, the `gh api` fallback); lap 1.2 opened PR #6 itself, CI passed `gates`, `protected-paths` and `scope-guard`, and it merged. Not tested: a new project set up from the kit with the empty deny list.
+
 ## 2026-11-16 — Ticket board
 
 Seen: the state of a ticket was split between BMAD files and GitHub tabs, and nothing showed what waited for a human.
