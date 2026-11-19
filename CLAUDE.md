@@ -12,7 +12,7 @@ How work is done here:
 
 - Planning uses BMAD skills (`bmad-agent-pm`, `bmad-architecture`, `bmad-ux`, `bmad-agent-po`).
 - Building a ticket is always done through the `lap` skill. Do not implement a ticket any other way.
-- The `lap` skill opens its pull request with `gh`. Do not label, approve or merge pull requests; the human merges.
+- Open pull requests with `gh` when the work calls for one (the `lap` skill opens its own). Never label, approve or merge a pull request; a human does that.
 - Do not use `bmad-build-auto`.
 
 Layout: `backend/` (Java 21, Spring Boot, Maven), `frontend/` (Angular), `e2e/` (Playwright), `harness/` (the judge; read-only for you).

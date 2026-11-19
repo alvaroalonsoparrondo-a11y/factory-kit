@@ -2,6 +2,13 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-19 — The agent may open any pull request; a human merges (from `factory-pilot`)
+
+Seen in `factory-pilot`: only the lap could open its pull request, so factory changes and kit ports stopped at a pushed branch and the human opened each pull request by hand (this kit's #3 and #4).
+
+- **`CLAUDE.md`:** open pull requests with `gh` when the work calls for one; the `lap` skill opens its own. Never label, approve or merge a pull request; a human does that.
+- **`MODIFYING.md`:** the agent may open factory-change and kit-port pull requests; a human adds `human-judge-change` and merges.
+
 ## 2026-11-19 — Laps in worktrees, and the dispatcher (from `factory-pilot`)
 
 Seen in `factory-pilot`, laps 1.3 and 1.6: the first parallel laps had to run in two full clones, because the lap required `main` checked out, and the lap had no step for a branch that falls behind `main`. The live board then lost sight of a lap running in a worktree: it read only its own folder live, so the lap looked frozen at its last push, its lap signals were never read, and one running lap kept every other one looking busy. Across laps 1.1 to 1.6 the human was also the event source and the orchestrator: picking, starting, pasting red checks, saying `merged`, and remembering follow-ups.
