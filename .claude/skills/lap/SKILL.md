@@ -9,7 +9,7 @@ One ticket, one branch, one pull request. You build; CI judges; a human merges. 
 
 Hard rules for the whole lap (from `FACTORY_RULES.md`):
 
-- Never change a factory file during a lap. Never weaken a test. Never look for the holdouts.
+- Never change a factory file during a lap. Never weaken a test.
 - Open the lap's pull request with `gh`. Never label, approve or merge a pull request; a human merges.
 - If you cannot finish within the limits below, stop and report. A stopped lap is a correct result.
 - **Say when you wait.** Before you stop to wait for the human, for any reason, run `python harness/board/lap_signal.py <ticket-id> waiting <kind> "<what you need>"`. When the human has answered, run `python harness/board/lap_signal.py <ticket-id> working` before you go on. This includes stops inside `bmad-build` (a permission, a choice, approving the plan) and the limits below. The kind is one of `permission`, `choice`, `approval`, `question`, `manual-step`, `limit`, `decision`. The final hand-over in step A9 needs no signal; the pull request shows it. You may run `lap_signal.py`; never change it.
@@ -41,7 +41,6 @@ Hard rules for the whole lap (from `FACTORY_RULES.md`):
 1. Make sure you are on the lap's branch.
 2. Read the failure.
    - `gates`: reproduce with `bash harness/run-gates.sh`, fix, run again until green.
-   - `holdouts`: you get only an ID such as `H-03`. Do not ask for more. Re-read the ticket and `MISSION.md`, find a requirement or invariant the change does not meet, add a test that shows it, then fix it.
    - `protected-paths` or `scope-guard`: you changed something you may not change. Revert that part. If the ticket cannot be done without it, stop and say so.
 3. Commit and `git push`. Tell the user in one line what you changed.
 4. At most **3** fix rounds per lap in total. After that, stop and recommend that the product owner split or rewrite the ticket.

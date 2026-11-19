@@ -11,7 +11,7 @@
 - Local gates: <!-- PASSED / FAILED --> — candidate `<!-- id printed by harness/run-gates.sh -->`
 - Fix rounds so far: <!-- 0 -->
 
-The evidence that counts is the required checks below this pull request: `gates`, `protected-paths`, `scope-guard`, `holdouts`.
+The evidence that counts is the required checks below this pull request: `gates`, `protected-paths`, `scope-guard`.
 
 ## Assumptions on open questions
 
