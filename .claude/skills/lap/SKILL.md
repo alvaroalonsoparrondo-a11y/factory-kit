@@ -59,7 +59,7 @@ A dispatched lap skips this section: the dispatcher marks the ticket done on `ma
 2. Ask the product owner skill (`bmad-agent-po`, BOARD) to mark the ticket done, and commit it.
    - Main checkout: `git push`.
    - Worktree: `git push origin HEAD:main`. If it is refused because `main` moved, `git fetch origin && git rebase origin/main` (one local commit, not yet pushed) and push again. Never force-push.
-3. Report one line: ticket, number of fix rounds, which checks had failed on the way. In a worktree, also say the worktree can now be removed (archiving its session removes it).
+3. Report one line: ticket, number of fix rounds, which checks had failed on the way. In a worktree, also say the worktree can now be removed (`git worktree remove <path>`; in the Claude desktop app, archiving its session does it).
 
 ## D. Main moved (the branch is behind `origin/main`)
 

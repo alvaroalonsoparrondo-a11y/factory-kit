@@ -17,10 +17,11 @@ A human may approve one such change by adding the label `human-approved-irrevers
 
 The agent never creates, edits, moves or deletes these paths:
 
-- `MISSION.md`, `FACTORY_RULES.md`, `CLAUDE.md`
+- `MISSION.md`, `FACTORY_RULES.md`, `AGENTS.md`, `CLAUDE.md`
 - `harness/`
 - `.github/`
 - `.claude/settings.json`, `.claude/skills/lap/`
+- `.kiro/agents/`, `.kiro/skills/lap/`
 - `_bmad/custom/`
 
 If a ticket seems to need such a change, the agent stops and asks. A human may approve one by adding the label `human-judge-change` to the pull request.

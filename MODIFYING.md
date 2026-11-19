@@ -12,9 +12,10 @@ The factory files have the same paths in both. That is what makes a change easy 
 **Factory files** — a change to any of these is a factory change:
 
 ```
-FACTORY_RULES.md   CLAUDE.md   RUNBOOK.md   MODIFYING.md   AGENT_SETUP.md
+FACTORY_RULES.md   AGENTS.md   CLAUDE.md   RUNBOOK.md   MODIFYING.md   AGENT_SETUP.md
 harness/           .github/    _bmad/custom/   .gitattributes
 .claude/settings.json          .claude/skills/lap/
+.kiro/agents/                  .kiro/skills/lap/
 ```
 
 `MISSION.md` is different: the kit holds only the empty template. A project's filled-in `MISSION.md` belongs to that project and never goes back to the kit.
@@ -82,7 +83,9 @@ Open the pull request in the project; the agent may open it with `gh`. A human a
 |---|---|---|
 | `harness/run-gates.sh`, or anything that makes a gate easier to pass | It weakens the judge | Run `bash harness/calibrate.sh` before and after. Every defect must still be `CAUGHT`. |
 | `.github/workflows/judge-guards.yml` | It uses `pull_request_target`, which has access to secrets | Never add a step that checks out or runs pull request code. |
-| The protected-path list | It appears in four places | Change all four together: `FACTORY_RULES.md` section 2, `.claude/settings.json`, `.github/CODEOWNERS`, and the pattern in `judge-guards.yml`. |
+| The protected-path list | It appears in five places | Change all five together: `FACTORY_RULES.md` section 2, `.claude/settings.json`, `.kiro/agents/factory.json`, `.github/CODEOWNERS`, and the pattern in `judge-guards.yml`. |
+| The `lap` skill | Each agent reads its own copy | Change `.claude/skills/lap/SKILL.md`, then copy it to `.kiro/skills/lap/SKILL.md`. The `gates` workflow fails while the two differ. |
+| The agent instructions | Claude Code and Kiro read one file | Change `AGENTS.md`. `CLAUDE.md` only imports it (`@AGENTS.md`); keep it that way. |
 | The runtime contract in `harness/README.md` | Gates and BMAD's architect rely on it | Update `harness/run-gates.sh` and `_bmad/custom/bmad-architecture.toml` if they mention the item. |
 | `_bmad/custom/*.toml` | BMAD merges these with its defaults | Check with `uv run --no-cache _bmad/scripts/resolve_customization.py --skill .claude/skills/<skill> --project-root . --key workflow` (or `--key agent`). |
 | How a new project is set up | The steps exist in two forms: for a person and for an agent | Change `AGENT_SETUP.md` and the one-time setup in `RUNBOOK.md` together. Do not put steps in the README prompt; it only points to `AGENT_SETUP.md`. |

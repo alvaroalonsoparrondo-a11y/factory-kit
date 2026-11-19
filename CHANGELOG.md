@@ -2,6 +2,18 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-19 — Kiro CLI can run interactive laps
+
+Planned since the kit started (README "Planned"), and needed at work, where Kiro CLI is the agent and runs interactively only. Everything that tied the factory to Claude Code was in the agent set-up files; the judge and BMAD did not depend on the agent.
+
+- **`AGENTS.md` (new) holds the agent instructions.** Kiro reads it by default. `CLAUDE.md` is now one line, `@AGENTS.md`, so the two cannot drift. `_bmad/custom/bmad-architecture.toml` reads the Layout line from `AGENTS.md`.
+- **`.kiro/agents/factory.json` (new) is Kiro's fence:** `fs_write` deny on the same protected paths as `.claude/settings.json`, and `shell` deny on force pushes. It lives in the agent file because Kiro keeps workspace permission files outside the repository. Laps in Kiro run as `kiro-cli chat --agent factory`.
+- **`.kiro/skills/lap/SKILL.md` (new) is a copy of the `lap` skill.** The `gates` workflow fails while the two copies differ. The lap's after-merge line no longer assumes the Claude desktop app to remove a worktree.
+- **Protected paths** gain `AGENTS.md`, `.kiro/agents/` and `.kiro/skills/lap/`, in all five places (`FACTORY_RULES.md`, `.claude/settings.json`, `.kiro/agents/factory.json`, `CODEOWNERS`, `judge-guards.yml`).
+- **BMAD** installs for both agents (`-a claude-code -a kiro-cli`). `RUNBOOK.md`, `AGENT_SETUP.md`, `MODIFYING.md` and `README.md` say how.
+
+Not tested yet: a real lap in Kiro; that Kiro's `fs_write` deny matches these relative globs; that `skills add -a kiro-cli` installs BMAD where Kiro finds it. The dispatcher still starts headless laps with Claude Code only.
+
 ## 2026-11-19 — The agent may open any pull request; a human merges (from `factory-pilot`)
 
 Seen in `factory-pilot`: only the lap could open its pull request, so factory changes and kit ports stopped at a pushed branch and the human opened each pull request by hand (this kit's #3 and #4).

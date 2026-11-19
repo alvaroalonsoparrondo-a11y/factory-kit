@@ -1,0 +1,36 @@
+{
+  "name": "factory",
+  "description": "The factory agent: plans with BMAD and builds tickets through the lap skill. Its deny rules are the fence that keeps it out of the factory files. Human-owned.",
+  "prompt": "Follow AGENTS.md. Build a ticket only through the lap skill.",
+  "tools": ["*"],
+  "resources": [
+    "file://AGENTS.md",
+    "skill://.kiro/skills/**/SKILL.md"
+  ],
+  "permissions": {
+    "rules": [
+      {
+        "capability": "fs_write",
+        "match": [
+          "MISSION.md",
+          "FACTORY_RULES.md",
+          "AGENTS.md",
+          "CLAUDE.md",
+          "harness/**",
+          ".github/**",
+          ".claude/settings.json",
+          ".claude/skills/lap/**",
+          ".kiro/agents/**",
+          ".kiro/skills/lap/**",
+          "_bmad/custom/**"
+        ],
+        "effect": "deny"
+      },
+      {
+        "capability": "shell",
+        "match": ["git push --force*", "git push -f*"],
+        "effect": "deny"
+      }
+    ]
+  }
+}

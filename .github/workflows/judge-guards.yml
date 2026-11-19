@@ -24,7 +24,7 @@ jobs:
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
           files="$(gh api "repos/$REPO/pulls/$PR/files" --paginate -q '.[] | .filename, (.previous_filename // empty)')"
-          hits="$(printf '%s\n' "$files" | grep -E '^(MISSION\.md|FACTORY_RULES\.md|CLAUDE\.md|harness/|\.github/|\.claude/settings\.json|\.claude/skills/lap/|_bmad/custom/)' || true)"
+          hits="$(printf '%s\n' "$files" | grep -E '^(MISSION\.md|FACTORY_RULES\.md|AGENTS\.md|CLAUDE\.md|harness/|\.github/|\.claude/settings\.json|\.claude/skills/lap/|\.kiro/agents/|\.kiro/skills/lap/|_bmad/custom/)' || true)"
           if [ -z "$hits" ]; then echo "No protected path touched."; exit 0; fi
           echo "Protected paths touched:"; printf '%s\n' "$hits"
           case ",$LABELS," in

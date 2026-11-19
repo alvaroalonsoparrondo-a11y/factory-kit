@@ -10,15 +10,15 @@ You drive the factory by hand at three points: you start each lap, you merge the
 2. **Install BMAD v7** in this folder (needs Node and `uv`):
 
    ```bash
-   npx -y skills add bmad-code-org/BMAD-METHOD/skills/core-tools --skill '*' -a claude-code -y
+   npx -y skills add bmad-code-org/BMAD-METHOD/skills/core-tools --skill '*' -a claude-code -a kiro-cli -y
    ```
 
    ```bash
-   npx -y skills add bmad-code-org/BMAD-METHOD/skills/method --skill '*' -a claude-code -y
+   npx -y skills add bmad-code-org/BMAD-METHOD/skills/method --skill '*' -a claude-code -a kiro-cli -y
    ```
 
-   Then, in a Claude Code session here, say `bmad setup`. Commit what it created (`.claude/skills/`, `_bmad/`).
-3. **Check the settings.** `.claude/settings.json` must exist and parse. Its deny list is the fence: it stops the agent from editing `MISSION.md`, `FACTORY_RULES.md`, `CLAUDE.md`, `harness/`, `.github/`, `.claude/settings.json`, the `lap` skill and `_bmad/custom/`, and from force-pushing.
+   Then, in an agent session here, say `bmad setup`. Commit what it created (`.claude/skills/`, `.kiro/skills/`, `_bmad/`). Drop `-a kiro-cli` if nobody will use Kiro, or `-a claude-code` if nobody will use Claude Code.
+3. **Check the settings.** `.claude/settings.json` (Claude Code) and `.kiro/agents/factory.json` (Kiro) must exist and parse. Their deny rules are the fence: they stop the agent from editing `MISSION.md`, `FACTORY_RULES.md`, `AGENTS.md`, `CLAUDE.md`, `harness/`, `.github/`, either agent's settings, the `lap` skill and `_bmad/custom/`, and from force-pushing.
 4. **Create two labels** in `__PROJECT__`: `human-judge-change` and `human-approved-irreversible`.
 5. **Protect `main`** in `__PROJECT__` (Settings → Branches): require a pull request, and require these status checks: `gates`, `protected-paths`, `scope-guard`. A check can only be selected after it has run once, so open a first small pull request (for example, the filled-in `MISSION.md`, with the `human-judge-change` label) and then add the checks.
    - Approvals: 1, by someone other than the person who ran the lap. On a one-person trial: 0, because GitHub does not let you approve your own pull request.
@@ -35,7 +35,14 @@ You drive the factory by hand at three points: you start each lap, you merge the
 
 ## Run laps
 
-In an agent session opened in this folder:
+In an agent session opened in this folder. With Kiro, start it as the factory agent, so the fence applies:
+
+```powershell
+kiro-cli chat --agent factory
+```
+
+To make it the default here, set `chat.defaultAgent` to `factory` in Kiro's settings. Kiro loads workspace agents only once you trust the folder.
+
 
 1. Say `run a lap` (or `lap <ticket id>`).
 2. When it stops, it has opened the pull request and printed its URL. If `gh` failed, it printed a link that opens the form filled in (the text is also in `.lap/<ticket id>-pr.md`): open it and create the pull request.
@@ -65,8 +72,8 @@ A ticket is ready when every ticket in its `after` is merged and their post-merg
 
 **Two ways to run it:**
 
-- `--no-agents`: the dispatcher claims, sets up the worktree, routes and closes; you run each lap in a Claude Code session in that worktree and paste what it tells you (`lap 1.4`, `lap 1.4 fix round`, `lap 1.4 main moved`). This is the shape that carries to work, where Kiro runs interactively only.
-- Headless: the dispatcher also runs the laps. It refuses while the fence is off (`.claude/settings.json` denies nothing, as now), because a headless lap would then have no guard at all. Turn the fence on, or pass `--allow-no-fence` knowingly. With a fence, `python harness/dispatch/dispatch.py verify-fence` checks that a headless lap obeys it: it runs the exact command the dispatcher uses (`--permission-mode dontAsk` with an allow list, never `bypassPermissions`) on a scratch repository and expects a refused edit to `harness/`, a refused write to `.claude/settings.json`, a refused force push, and an allowed ordinary edit.
+- `--no-agents`: the dispatcher claims, sets up the worktree, routes and closes; you run each lap in an agent session in that worktree (Claude Code, or `kiro-cli chat --agent factory`) and paste what it tells you (`lap 1.4`, `lap 1.4 fix round`, `lap 1.4 main moved`). This is the shape that carries to work, where Kiro runs interactively only.
+- Headless (Claude Code only, so far): the dispatcher also runs the laps. It refuses while the fence is off (`.claude/settings.json` denies nothing, as now), because a headless lap would then have no guard at all. Turn the fence on, or pass `--allow-no-fence` knowingly. With a fence, `python harness/dispatch/dispatch.py verify-fence` checks that a headless lap obeys it: it runs the exact command the dispatcher uses (`--permission-mode dontAsk` with an allow list, never `bypassPermissions`) on a scratch repository and expects a refused edit to `harness/`, a refused write to `.claude/settings.json`, a refused force push, and an allowed ordinary edit.
 
 **One-time:**
 
@@ -150,5 +157,5 @@ Per lap: fix rounds; which check failed; anything the agent tried to change that
 
 ## Limits to keep in mind
 
-- The fence here is a guard rail. A shell command can still read or write a denied path. The real enforcement is the three required checks.
+- The fence here is a guard rail, for both agents. A shell command can still read or write a denied path. The real enforcement is the three required checks.
 - The workflows assume Java 21 + Spring Boot + Maven in `backend/`, Angular in `frontend/`, Playwright in `e2e/`.

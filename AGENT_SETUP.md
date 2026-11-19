@@ -17,7 +17,7 @@ The kit is a private GitHub template repository, `OWNER/factory-kit`. A project 
 ## Rules
 
 - Never create, ask for, print or store a token, password or secret. Those steps belong to the person.
-- Do not change any factory file by hand: `FACTORY_RULES.md`, `CLAUDE.md`, `harness/`, `.github/`, `_bmad/custom/`, `.claude/settings.json`, `.claude/skills/lap/`. The only allowed change to them is what `init-project.sh` does.
+- Do not change any factory file by hand: `FACTORY_RULES.md`, `AGENTS.md`, `CLAUDE.md`, `harness/`, `.github/`, `_bmad/custom/`, `.claude/settings.json`, `.claude/skills/lap/`, `.kiro/agents/`, `.kiro/skills/lap/`. The only allowed change to them is what `init-project.sh` does.
 - Setup only. Do not write `MISSION.md` content, a PRD, tickets or application code.
 - Use HTTPS remotes (`https://github.com/OWNER/<repo>.git`). If a clone or push fails on SSH, switch the remote to HTTPS and retry.
 - End every commit message with the co-author line your environment tells you to use.
@@ -49,15 +49,15 @@ bash init-project.sh OWNER PROJECT
 **Check:**
 - No file contains a placeholder (two underscores, then `OWNER`, `PROJECT` or `PARENT_DIR`, then two underscores), except `MODIFYING.md`, which explains them.
 - `init-project.sh` is gone. `README.md` is now a short project page, and the kit-only files `AGENT_SETUP.md`, `CHANGELOG.md` and `PROJECT_README.md` are gone. Keep following the copy of these instructions you already read.
-- The JSON file in `PROJECT/.claude/` parses. Its deny list is not empty: it is the fence that keeps the agent out of the factory files.
+- The JSON files `PROJECT/.claude/settings.json` and `PROJECT/.kiro/agents/factory.json` parse. The first has a non-empty deny list, the second a `deny` rule for `fs_write`: they are the fence that keeps Claude Code and Kiro out of the factory files.
 
 Commit ("Fill in project names") and push.
 
 ## Step 4: Install and set up BMAD v7 (in PROJECT only)
 
 ```bash
-npx -y skills add bmad-code-org/BMAD-METHOD/skills/core-tools --skill '*' -a claude-code -y
-npx -y skills add bmad-code-org/BMAD-METHOD/skills/method --skill '*' -a claude-code -y
+npx -y skills add bmad-code-org/BMAD-METHOD/skills/core-tools --skill '*' -a claude-code -a kiro-cli -y
+npx -y skills add bmad-code-org/BMAD-METHOD/skills/method --skill '*' -a claude-code -a kiro-cli -y
 uv run --no-cache .claude/skills/bmad/scripts/setup.py --project-root . --skill .claude/skills/bmad --root .claude/skills
 ```
 
@@ -69,9 +69,9 @@ The setup command prints JSON. It must show `"current": true` and an empty `"pro
 uv run --no-cache _bmad/scripts/resolve_customization.py --skill .claude/skills/bmad-build --project-root . --key workflow
 ```
 
-The output must contain the review lens id `factory-judge`, `"review": "thorough"`, and `MISSION.md` among `persistent_facts`. Also check that `.claude/skills/lap/SKILL.md` still exists and is unchanged (`git status` shows it clean).
+The output must contain the review lens id `factory-judge`, `"review": "thorough"`, and `MISSION.md` among `persistent_facts`. Also check that `.claude/skills/lap/SKILL.md` and `.kiro/skills/lap/SKILL.md` still exist and are unchanged (`git status` shows them clean), and that `.kiro/skills/` now holds the same BMAD skills as `.claude/skills/`.
 
-Commit ("Install BMAD v7") and push. Include `.claude/skills/`, `_bmad/` and `skills-lock.json`.
+Commit ("Install BMAD v7") and push. Include `.claude/skills/`, `.kiro/skills/`, `_bmad/` and `skills-lock.json`.
 
 ## Step 5: GitHub settings that need no secret
 
@@ -109,4 +109,4 @@ Give the person a short report:
    - Plan the product with BMAD, fill in `MISSION.md` themselves, then say "run a lap".
 4. Anything that surprised you, or that this file or the kit's other documents got wrong, so the kit can be fixed.
 
-Then tell the person to close this session. Laps run in a fresh session opened inside the project folder, so its `CLAUDE.md` and rules apply.
+Then tell the person to close this session. Laps run in a fresh session opened inside the project folder, so its `AGENTS.md` and rules apply (in Kiro: `kiro-cli chat --agent factory`).
