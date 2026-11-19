@@ -9,9 +9,10 @@ Then open http://127.0.0.1:8765. It reads what board.py reads: Git (it runs `git
 every 30 seconds), the BMAD files, and GitHub through your own `gh` login (`gh auth token`)
 or GITHUB_TOKEN. With neither, it shows Git only: no pull requests or checks.
 
-The branch checked out here is read from the working tree, so a running lap shows
-its plan before it is pushed. It also reads the lap's stops from `.lap/<ref>.jsonl`
-(written by lap_signal.py) and shows a running lap as quiet when nothing in the working tree
+The branch checked out here, and every `story/*` branch checked out in another worktree
+of this repository, is read from its working tree, so a running lap shows its plan
+before it is pushed, wherever it runs. It also reads each lap's stops from `.lap/<ref>.jsonl`
+(written by lap_signal.py) and shows a running lap as quiet when nothing in its working tree
 has changed for --quiet-minutes.
 """
 import argparse
@@ -132,13 +133,30 @@ def working_files(root):
     return out
 
 
+def parse_worktrees(porcelain):
+    """{branch: path} of the `story/*` branches checked out in worktrees, from
+    `git worktree list --porcelain`. Worktrees whose folder is gone are left out."""
+    out, path = {}, None
+    for line in porcelain.splitlines():
+        if line.startswith("worktree "):
+            path = line[len("worktree "):]
+        elif line.startswith("branch refs/heads/story/") and path:
+            if Path(path).is_dir():
+                out[line[len("branch refs/heads/"):]] = path
+        elif not line.strip():
+            path = None
+    return out
+
+
 ACTIVITY_SECONDS = 30
 SKIP_DIRS = {".git", "node_modules", ".lap"}
 
 
-def read_signals(root, problems):
-    """{ref: [signal, ...]} from `.lap/<ref>.jsonl`, the lap's own record of its stops."""
-    out = {}
+def read_signals(root, problems, out=None):
+    """{ref: [signal, ...]} from `.lap/<ref>.jsonl`, the lap's own record of its stops.
+
+    Pass `out` to add one working tree's signals to those of others."""
+    out = {} if out is None else out
     folder = Path(root) / ".lap"
     if not folder.is_dir():
         return out
@@ -154,15 +172,18 @@ def read_signals(root, problems):
                 continue
             if isinstance(event, dict):
                 events.append(event)
-        out[p.stem] = events
+        out.setdefault(p.stem, []).extend(events)
     return out
 
 
 def newest_change(root):
-    """The newest change time of any file or folder in the working tree, build output included."""
+    """The newest change time of any file or folder in the working tree, build output included.
+
+    A folder holding its own `.git` (a worktree nested here, as under `.claude/worktrees/`) is
+    another working tree and is left out, so another lap's work never keeps this one awake."""
     newest = 0.0
     for folder, dirs, files in os.walk(root):
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not os.path.exists(os.path.join(folder, d, ".git"))]
         for name in [*files, *dirs]:
             try:
                 newest = max(newest, os.stat(os.path.join(folder, name)).st_mtime)
@@ -230,7 +251,7 @@ class Source:
         self.quiet_seconds = quiet_seconds
         self.lock = threading.Lock()
         self.fetched = 0.0
-        self.looked = (0.0, 0.0)  # when the working tree was last walked, and its newest change then
+        self.looked = {}  # folder: (when it was last walked, its newest change then)
         self.cached = (0.0, None, None)  # time, board, snapshot
         self.error = None
 
@@ -242,6 +263,18 @@ class Source:
             return self._git("rev-parse", "--abbrev-ref", "HEAD").strip()
         except RuntimeError:
             return ""
+
+    def live_trees(self):
+        """{branch: folder} for every branch whose files are read from a working tree:
+        the one checked out here, plus `story/*` branches in other worktrees."""
+        try:
+            trees = parse_worktrees(self._git("worktree", "list", "--porcelain"))
+        except RuntimeError:
+            trees = {}
+        branch = self.current_branch()
+        if branch:
+            trees[branch] = self.root
+        return trees
 
     def snapshot(self):
         if time.time() - self.fetched > FETCH_SECONDS:
@@ -257,21 +290,32 @@ class Source:
         if branch == "main":
             snap["plans"]["main"] = b.read_plans(files)
             snap["tickets"] = b.read_tickets(files, snap["problems"])
-        elif branch.startswith("story/"):
-            snap["plans"][branch] = b.read_plans(files)
-            if branch not in snap["branches"]:
-                snap["branches"].append(branch)
+        for ref, folder in self.live_trees().items():
+            if not ref.startswith("story/"):
+                continue
+            snap["plans"][ref] = b.read_plans(files if folder == self.root else working_files(folder))
+            if ref not in snap["branches"]:
+                snap["branches"].append(ref)
         dirty = bool(self._git("status", "--porcelain").strip())
         snap["local"] = {"branch": branch, "dirty": dirty, "github": not isinstance(self.gh, NoGitHub)}
-        # The lap's signals, and whether this folder has gone quiet.
+        # Each lap's signals, and whether the working tree it runs in has gone quiet.
         now = time.time()
-        if now - self.looked[0] > ACTIVITY_SECONDS:
-            self.looked = (now, newest_change(self.root))
+        trees = self.live_trees()
+        signals, idle = {}, {}
+        for folder in dict.fromkeys([self.root, *trees.values()]):
+            read_signals(folder, snap["problems"], signals)
+        for ref, folder in trees.items():
+            if not ref.startswith("story/"):
+                continue
+            at, newest = self.looked.get(folder, (0.0, 0.0))
+            if now - at > ACTIVITY_SECONDS:
+                at, newest = now, newest_change(folder)
+                self.looked[folder] = (at, newest)
+            idle[ref] = max(now - newest, 0)
         snap["now"] = now
-        snap["signals"] = read_signals(self.root, snap["problems"])
+        snap["signals"] = signals
         snap["branch_times"] = branch_times(self.root)
-        snap["activity"] = {"branch": branch, "idle_seconds": max(now - self.looked[1], 0),
-                            "quiet_seconds": self.quiet_seconds}
+        snap["activity"] = {"idle_seconds": idle, "quiet_seconds": self.quiet_seconds}
         return snap
 
     def refresh(self):
@@ -307,8 +351,9 @@ class Source:
 
     def _read(self, ref, path):
         """A file from the working tree when `ref` is checked out here, else from `origin/<ref>`."""
-        if ref == self.current_branch():
-            p = Path(self.root) / path
+        folder = self.live_trees().get(ref)
+        if folder:
+            p = Path(folder) / path
             return p.read_text(encoding="utf-8") if p.is_file() else None
         try:
             return self._git("show", f"origin/{ref}:{path}")
@@ -329,7 +374,7 @@ class Source:
             text = self._read(ref, row["plan_path"]) or self._read("main", row["plan_path"])
             if text:
                 docs.append({"name": "plan", "text": text})
-        pr_file = Path(self.root) / ".lap" / f"{row['ref']}-pr.md"
+        pr_file = Path(self.live_trees().get(row["branch"] or "", self.root)) / ".lap" / f"{row['ref']}-pr.md"
         if pr_file.is_file():
             docs.append({"name": "pull request", "text": pr_file.read_text(encoding="utf-8")})
         epic_path = re.sub(r"/tickets/tickets\.toml$", f"/{epic}.md", t["source"])

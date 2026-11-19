@@ -211,7 +211,7 @@ def lap(stage="in-progress", signals=None, branch_time=None, idle=None, quiet=60
     s["signals"] = {"1.1": signals or []}
     s["branch_times"] = {"story/1.1": NOW - branch_time * 60} if branch_time is not None else {}
     if idle is not None:
-        s["activity"] = {"branch": here, "idle_seconds": idle * 60, "quiet_seconds": quiet}
+        s["activity"] = {"idle_seconds": {here: idle * 60}, "quiet_seconds": quiet}
     return row(b.derive(s), 1)
 
 
@@ -270,8 +270,8 @@ class Quiet(unittest.TestCase):
     def test_below_the_threshold_is_running(self):
         self.assertEqual(lap(idle=9)["status"], "running")
 
-    def test_only_the_branch_checked_out_here(self):
-        self.assertEqual(lap(idle=25, here="main")["status"], "running")
+    def test_only_a_branch_checked_out_in_a_working_tree(self):
+        self.assertEqual(lap(idle=25, here="story/1.6")["status"], "running")
 
     def test_a_named_wait_is_not_quiet(self):
         r = lap(idle=25, signals=[{"at": at(25), "state": "waiting", "kind": "approval", "text": "Approve"}])
@@ -285,7 +285,7 @@ class Quiet(unittest.TestCase):
         t = {**ticket(1), "ref": "1.1"}
         s = snap([t], {"main": [], "story/1.1": [plan(1, "built")]}, ["story/1.1"],
                  [pull(7, "story/1.1", checks={"gates": "running"})])
-        s.update(now=NOW, activity={"branch": "story/1.1", "idle_seconds": 3600, "quiet_seconds": 600})
+        s.update(now=NOW, activity={"idle_seconds": {"story/1.1": 3600}, "quiet_seconds": 600})
         self.assertEqual(row(b.derive(s), 1)["status"], "running")
 
 
@@ -374,6 +374,16 @@ class Reading(unittest.TestCase):
         }
         [t] = b.read_tickets(files, [])
         self.assertEqual((t["ref"], t["notes"], t["source"]), ("3.2", ["n1"], f"{EPIC_PATH}/tickets.toml"))
+
+    def test_touches_and_post_merge(self):
+        files = {f"{EPIC_PATH}/tickets.toml": '[[entry]]\nid = 1\ntouches = ["backend/**"]\n'
+                                              '[[entry.post_merge]]\nwhat = "commit the lock"\n'
+                                              'done_when = "file:harness/skeleton.lock"\n\n'
+                                              '[[entry]]\nid = 2\n'}
+        one, two = b.read_tickets(files, [])
+        self.assertEqual(one["touches"], ["backend/**"])
+        self.assertEqual(one["post_merge"], [{"what": "commit the lock", "done_when": "file:harness/skeleton.lock"}])
+        self.assertEqual((two["touches"], two["post_merge"]), (None, []))
 
     def test_check_state(self):
         self.assertEqual(b.check_state("in_progress", None), "running")
