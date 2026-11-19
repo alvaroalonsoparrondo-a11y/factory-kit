@@ -49,7 +49,7 @@ bash init-project.sh OWNER PROJECT
 **Check:**
 - No file contains a placeholder (two underscores, then `OWNER`, `PROJECT` or `PARENT_DIR`, then two underscores), except `MODIFYING.md`, which explains them.
 - `init-project.sh` is gone. `README.md` is now a short project page, and the kit-only files `AGENT_SETUP.md`, `CHANGELOG.md` and `PROJECT_README.md` are gone. Keep following the copy of these instructions you already read.
-- The JSON file in `PROJECT/.claude/` parses. Its deny list is empty: the fence is off, and the rules in `FACTORY_RULES.md` and `CLAUDE.md` bind the agent instead.
+- The JSON file in `PROJECT/.claude/` parses. Its deny list is not empty: it is the fence that keeps the agent out of the factory files.
 
 Commit ("Fill in project names") and push.
 

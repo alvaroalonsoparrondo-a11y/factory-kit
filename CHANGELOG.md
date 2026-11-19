@@ -2,6 +2,16 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-19 — The fence is back on (from `factory-pilot`)
+
+Seen in `factory-pilot`: the fence came off on 2026-11-18 to make factory changes faster during the proof of concept. Once the dispatcher could run laps headless, an empty deny list meant such a lap had no guard at all, and the rules bound the agent by instruction only.
+
+- **`.claude/settings.json`** has its deny list again: `MISSION.md`, `FACTORY_RULES.md`, `CLAUDE.md`, `harness/`, `.github/`, `.claude/settings.json`, the `lap` skill, `_bmad/custom/`, and force pushes. No holdouts rules, since the kit no longer has holdouts; `gh` stays allowed, since the lap opens its own pull request.
+- **`FACTORY_RULES.md` section 2, `CLAUDE.md`, `MODIFYING.md` rules 1 and 2 and the porting step** are back to: a human makes factory changes, or a session they direct, on a `factory/` branch with a pull request labelled `human-judge-change`.
+- **`RUNBOOK.md`, `README.md`, `AGENT_SETUP.md`** describe the fence again instead of an empty deny list.
+
+Tested in `factory-pilot` (commit c112d0d): the dispatcher's fence check on a scratch repository refused a headless lap's edit to `harness/`, its write to `.claude/settings.json` and a force push, and allowed an ordinary edit.
+
 ## 2026-11-19 — Holdouts removed
 
 Seen in `factory-pilot`, after tickets 1.1 to 1.6: the hidden-scenario side is most of the setup (a second repository, two fine-grained tokens, two variables, a `pull_request_target` workflow that dispatches across repositories) and had not yet caught anything the other checks missed. Its hiding was also weaker than it looked: the deny rules blocked the `Read` tool on the sibling folder but not a shell `cat`.
