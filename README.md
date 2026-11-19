@@ -1,8 +1,8 @@
 # Factory kit
 
-A reusable software factory for BMAD v7: an agent builds one ticket per lap, and a judge the agent cannot see or change decides whether it merges.
+A reusable software factory for BMAD v7: an agent builds one ticket per lap, and a judge the agent cannot change decides whether it merges.
 
-This repository is a **template**. It holds only the factory, no product. Its partner template, `factory-kit-holdouts`, holds the hidden acceptance tests.
+This repository is a **template**. It holds only the factory, no product.
 
 | Document | Read it when |
 |---|---|
@@ -27,11 +27,9 @@ BMAD's own skills are **not** in the kit. Each project installs them, so the kit
 
 ## Start a new project
 
-1. On GitHub: **Use this template** on `factory-kit` → `<project>`, and on `factory-kit-holdouts` → `<project>-holdouts`. Both private.
-2. Clone both next to each other.
-3. In each clone, run the one-time script, then commit:
-   - `bash init-project.sh <github-owner> <project>` in the application repository
-   - `bash init-project.sh <project>` in the hidden-scenario repository
+1. On GitHub: **Use this template** on `factory-kit` → `<project>`, private.
+2. Clone it.
+3. Run the one-time script `bash init-project.sh <github-owner> <project>`, then commit.
 4. Follow [RUNBOOK.md](RUNBOOK.md).
 
 ## Start a new project with an agent
@@ -54,7 +52,7 @@ First read the setup instructions from the kit:
 Then follow them exactly, step by step, including every check and the final report.
 
 Never create or handle tokens or secrets; list those steps for me at the end.
-Setup only: do not write the mission, a PRD, tickets, code or hidden scenarios.
+Setup only: do not write the mission, a PRD, tickets or code.
 ~~~
 
 Add your own rules as extra lines at the end of the prompt. To change how setup works for everyone, change `AGENT_SETUP.md` (see [MODIFYING.md](MODIFYING.md)), not the prompt.
@@ -63,6 +61,6 @@ After the agent finishes, close that session. Laps always run in a fresh session
 
 ## Status
 
-Tested so far: an agent-style setup of a throwaway project end to end; `gates` and `calibrate` on GitHub; the two guard checks on a real pull request. Not yet tested: the hidden-scenario judge with real tokens, and a full lap. See [CHANGELOG.md](CHANGELOG.md).
+Tested so far: an agent-style setup of a throwaway project end to end; `gates` and `calibrate` on GitHub; the two guard checks on a real pull request. Not yet tested: a full lap. See [CHANGELOG.md](CHANGELOG.md).
 
 Planned: Kiro versions of the three agent set-up files (`.kiro/steering/`, `.kiro/agents/`), and AWS CodeBuild versions of the workflows.

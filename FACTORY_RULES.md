@@ -31,14 +31,10 @@ If a ticket seems to need such a change, the lap stops and asks. Outside a lap, 
 - A changed assertion must be explained in the pull request, with the requirement that justifies it.
 - New behaviour comes with a test that fails without it.
 
-## 4. Holdouts stay hidden
+## 4. Evidence comes from CI
 
-Hidden acceptance scenarios exist in another repository. The agent never looks for them, never asks for their text, and never tries to guess them from a failure. A failing holdout is reported only as an ID (for example `H-03`). The right response is to re-read the ticket and `MISSION.md` and find the requirement that was missed.
+"It passes on my machine" is not evidence. A lap is done when the required checks on the pull request are green: `gates`, `protected-paths`, `scope-guard`.
 
-## 5. Evidence comes from CI
-
-"It passes on my machine" is not evidence. A lap is done when the required checks on the pull request are green: `gates`, `protected-paths`, `scope-guard`, `holdouts`.
-
-## 6. One ticket per lap
+## 5. One ticket per lap
 
 One ticket, one branch (`story/<id>`), one pull request. No extra features, no drive-by refactoring, no new dependencies unless the ticket names them.

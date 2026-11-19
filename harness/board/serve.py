@@ -12,7 +12,7 @@ or GITHUB_TOKEN. With neither, it shows Git only: no pull requests or checks.
 The branch checked out here is read from the working tree, so a running lap shows
 its plan before it is pushed. It also reads the lap's stops from `.lap/<ref>.jsonl`
 (written by lap_signal.py) and shows a running lap as quiet when nothing in the working tree
-has changed for --quiet-minutes. Nothing here reads the holdouts repository.
+has changed for --quiet-minutes.
 """
 import argparse
 import json

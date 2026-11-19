@@ -20,8 +20,8 @@ def plan(id, status, epic=EPIC, review="", loops=0, blocked=""):
             "blocked_at": "2026-11-16" if blocked else "", "blocked_reason": blocked}
 
 
-def pull(number, branch, state="open", merged=False, checks=None, judged=1, human=0, holdouts=""):
-    states = {c: {"state": s, "description": holdouts if c == "holdouts" else ""} for c, s in (checks or {}).items()}
+def pull(number, branch, state="open", merged=False, checks=None, judged=1, human=0):
+    states = {c: {"state": s, "description": ""} for c, s in (checks or {}).items()}
     return {"number": number, "url": f"https://github.com/o/r/pull/{number}", "branch": branch, "state": state,
             "merged": merged, "checks": states, "judged_commits": judged, "human_reviews": human}
 
@@ -104,11 +104,6 @@ class NeedsYou(unittest.TestCase):
         r = self.in_ci({**GREEN, "gates": "red"})
         self.assertEqual((r["status"], r["needs_you"]), ("needs you", "Paste the failing check into the lap (gates)"))
 
-    def test_holdouts_red_shows_only_ids(self):
-        r = self.in_ci({**GREEN, "holdouts": "red"}, holdouts="failing: H-03 H-01")
-        self.assertEqual(r["holdout_ids"], ["H-01", "H-03"])
-        self.assertEqual(r["needs_you"], "Paste the failing check into the lap (holdouts: H-01, H-03)")
-
     def test_a_red_guard_comes_before_a_red_gate(self):
         r = self.in_ci({**GREEN, "gates": "red", "scope-guard": "red"})
         self.assertEqual(r["needs_you"], "Review the change: label it or send it back (scope-guard)")
@@ -117,8 +112,8 @@ class NeedsYou(unittest.TestCase):
         self.assertEqual(self.in_ci(GREEN)["needs_you"], "Review and merge")
 
     def test_a_check_that_never_reported(self):
-        r = self.in_ci({"gates": "green", "protected-paths": "green", "scope-guard": "green"})
-        self.assertEqual(r["needs_you"], "A required check has not reported: holdouts")
+        r = self.in_ci({"gates": "green", "protected-paths": "green"})
+        self.assertEqual(r["needs_you"], "A required check has not reported: scope-guard")
 
     def test_closed_without_merge(self):
         s = snap([ticket(1)], branches=["story/1"], pulls=[pull(7, "story/1", "closed")])
@@ -329,14 +324,14 @@ class Rendering(unittest.TestCase):
     def test_page(self):
         s = snap([ticket(1, "Walking | skeleton"), ticket(2, "Redirect", after=[1])],
                  {"main": [], "story/1": [plan(1, "built", review="thorough")]}, ["story/1"],
-                 [pull(7, "story/1", checks={**GREEN, "holdouts": "red"}, holdouts="H-03")])
+                 [pull(7, "story/1", checks={**GREEN, "gates": "red"})])
         md = b.render_markdown(b.derive(s))
         self.assertIn("# Board: r", md)
         self.assertIn("1 needs you · 1 waiting", md)
         self.assertIn("- **epic-shortlink #1** Walking \\| skeleton: Paste the failing check into the lap "
-                      "(holdouts: H-03) → [#7](https://github.com/o/r/pull/7)", md)
+                      "(gates) → [#7](https://github.com/o/r/pull/7)", md)
         self.assertIn("| 1 | Walking \\| skeleton | In CI | needs you | Paste the failing check into the lap "
-                      "(holdouts: H-03) | ✅✅✅❌ H-03 | 1/0/0 | [#7](https://github.com/o/r/pull/7) |", md)
+                      "(gates) | ❌✅✅ | 1/0/0 | [#7](https://github.com/o/r/pull/7) |", md)
         self.assertIn("| 2 | Redirect | Planned | waiting | – (after #1) | – | – | – |", md)
         self.assertIn("## Problems\n\nNone.", md)
 

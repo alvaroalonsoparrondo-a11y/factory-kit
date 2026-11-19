@@ -2,6 +2,22 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-19 — Holdouts removed
+
+Seen in `factory-pilot`, after tickets 1.1 to 1.6: the hidden-scenario side is most of the setup (a second repository, two fine-grained tokens, two variables, a `pull_request_target` workflow that dispatches across repositories) and had not yet caught anything the other checks missed. Its hiding was also weaker than it looked: the deny rules blocked the `Read` tool on the sibling folder but not a shell `cat`.
+
+Changes:
+- **`request-holdouts.yml`** deleted. The required checks are now `gates`, `protected-paths` and `scope-guard`.
+- **Boards** (`board.py`, `dashboard.html`, `serve.py`): no `holdouts` column and no holdout IDs.
+- **`FACTORY_RULES.md`**: section 4 "Holdouts stay hidden" removed; sections 5 and 6 become 4 and 5.
+- **`lap` skill**: no holdouts rule and no holdouts fix round.
+- **Setup** (`README.md`, `AGENT_SETUP.md`, `RUNBOOK.md`, `PROJECT_README.md`, `MODIFYING.md`): one repository per project; no tokens, no repository variables, no hidden-scenario session.
+- `factory-kit-holdouts` is no longer used; archive it on GitHub.
+
+What is lost: an independent check that the build matches the intent rather than only the agent's own tests. To bring it back, revert this entry's commit and un-archive `factory-kit-holdouts`.
+
+Tested: the board tests (59 pass).
+
 ## 2026-11-18 — Lap signals: the live board shows when a running lap needs you
 
 Seen in `factory-pilot`, lap 1.1 (2026-11-16 and 17): seven stops for a human, five of them only in the chat (permission for subagents twice, keep or split an oversized plan, approve the plan) and invisible on both boards. All five reviewers stopped on a usage limit and the lap sat for hours while the board said "In review". The review count showed 2 passes only because BMAD's loop counter, which counts loopbacks, happened to be 1; the 62 findings were not shown.

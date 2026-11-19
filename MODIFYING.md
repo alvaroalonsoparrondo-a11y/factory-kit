@@ -4,7 +4,7 @@ The factory is improved while it is used. This page says where a change is made,
 
 ## The two kinds of repository
 
-- **The kit** (`factory-kit`, `factory-kit-holdouts`): the source of truth for the factory. No product code.
+- **The kit** (`factory-kit`): the source of truth for the factory. No product code.
 - **A project** (for example `factory-pilot`): made from the kit. It holds a product plus a copy of the factory files.
 
 The factory files have the same paths in both. That is what makes a change easy to carry across.
@@ -76,18 +76,14 @@ git push -u origin factory/update-from-kit
 
 Merge it into the project's `main`, directly or through a pull request. Replace placeholders with the project's real names where the change touched such a line.
 
-## Changing the hidden-scenario side
-
-The same three rules, between `factory-kit-holdouts` and `<project>-holdouts`. Only the machinery goes back to the kit: `run-judges.sh`, `judges/_lib.sh`, the workflow, `README.md`, `CLAUDE.md`. A project's scenarios and judges (`SCENARIOS.md`, `judges/H-01.sh` and up) never do.
-
 ## Changes that need extra care
 
 | Change | Why | Do this as well |
 |---|---|---|
 | `harness/run-gates.sh`, or anything that makes a gate easier to pass | It weakens the judge | Run `bash harness/calibrate.sh` before and after. Every defect must still be `CAUGHT`. |
-| `.github/workflows/judge-guards.yml` or `request-holdouts.yml` | They use `pull_request_target`, which has access to secrets | Never add a step that checks out or runs pull request code. |
+| `.github/workflows/judge-guards.yml` | It uses `pull_request_target`, which has access to secrets | Never add a step that checks out or runs pull request code. |
 | The protected-path list | It appears in four places | Change all four together: `FACTORY_RULES.md` section 2, `.claude/settings.json`, `.github/CODEOWNERS`, and the pattern in `judge-guards.yml`. |
-| The runtime contract in `harness/README.md` | Gates, the hidden-scenario runner and BMAD's architect all rely on it | Update `harness/run-gates.sh`, `run-judges.sh` in the hidden-scenario kit, and `_bmad/custom/bmad-architecture.toml` if they mention the item. |
+| The runtime contract in `harness/README.md` | Gates and BMAD's architect rely on it | Update `harness/run-gates.sh` and `_bmad/custom/bmad-architecture.toml` if they mention the item. |
 | `_bmad/custom/*.toml` | BMAD merges these with its defaults | Check with `uv run --no-cache _bmad/scripts/resolve_customization.py --skill .claude/skills/<skill> --project-root . --key workflow` (or `--key agent`). |
 | How a new project is set up | The steps exist in two forms: for a person and for an agent | Change `AGENT_SETUP.md` and the one-time setup in `RUNBOOK.md` together. Do not put steps in the README prompt; it only points to `AGENT_SETUP.md`. |
 | A BMAD upgrade | Skill names and customisation keys can change | Upgrade in one project first, run a lap, then update `skills-lock.json` in the kit. |

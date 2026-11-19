@@ -10,8 +10,7 @@ Part of the judge. Human-owned. Standard library only (Python 3.11+).
 Environment for collection: GITHUB_REPOSITORY (owner/name), GITHUB_TOKEN,
 GITHUB_API_URL (default https://api.github.com), GITHUB_SERVER_URL (default https://github.com).
 
-The board has no state of its own. Nothing here reads the holdouts repository:
-a failing hidden scenario is known only by the ID in the `holdouts` commit status.
+The board has no state of its own.
 """
 import argparse
 import json
@@ -26,7 +25,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-CHECKS = ("gates", "protected-paths", "scope-guard", "holdouts")
+CHECKS = ("gates", "protected-paths", "scope-guard")
 GUARDS = ("protected-paths", "scope-guard")
 PLAN_STATUSES = ("draft", "ready-for-dev", "in-progress", "in-review", "built", "done", "blocked", "dropped")
 MARK = {"green": "✅", "red": "❌", "running": "⏳", "missing": "➖"}
@@ -381,8 +380,6 @@ def derive(snapshot):
             if plan and (status == "blocked" or plan["blocked_at"]) else None,
             "pr": {"number": pr["number"], "url": pr["url"]} if pr else None,
             "checks": {c: (pr["checks"].get(c) or {}).get("state", "missing") for c in CHECKS} if pr else None,
-            "holdout_ids": sorted(set(re.findall(
-                r"H-\d+", (pr["checks"].get("holdouts") or {}).get("description", "")))) if pr else [],
             "reviews": {
                 "bmad": passes or (loops + 1 if reviewed else 0),
                 "findings": plan.get("findings") if plan else None,
@@ -490,8 +487,7 @@ def _needs_you(r, snapshot):
         if any(c in GUARDS for c in red):
             return "Review the change: label it or send it back (" + ", ".join(c for c in red if c in GUARDS) + ")"
         if red:
-            ids = f": {', '.join(r['holdout_ids'])}" if "holdouts" in red and r["holdout_ids"] else ""
-            return f"Paste the failing check into the lap ({', '.join(red)}{ids})"
+            return f"Paste the failing check into the lap ({', '.join(red)})"
         if all(checks[c] == "green" for c in CHECKS):
             return "Review and merge"
         missing = [c for c in CHECKS if checks[c] == "missing"]
@@ -562,8 +558,6 @@ def render_markdown(board):
             checks = "–"
             if r["checks"]:
                 checks = "".join(MARK[r["checks"][c]] for c in CHECKS)
-                if r["holdout_ids"] and r["checks"]["holdouts"] == "red":
-                    checks += " " + ", ".join(r["holdout_ids"])
             rv = r["reviews"]
             reviews = f"{rv['bmad']}/{rv['fix_rounds']}/{rv['human']}" if rv else "–"
             if rv and rv.get("findings"):
@@ -575,7 +569,7 @@ def render_markdown(board):
     out += ["## Problems", ""]
     out += [f"- {p}" for p in board["problems"]] or ["None."]
     out += ["", "---", "",
-            "Checks, in order: `gates`, `protected-paths`, `scope-guard`, `holdouts` "
+            "Checks, in order: `gates`, `protected-paths`, `scope-guard` "
             f"({MARK['green']} green, {MARK['red']} red, {MARK['running']} running, {MARK['missing']} not reported). "
             "Reviews: BMAD review passes / fix rounds / human reviews, then the findings in the plan's triage log. "
             "Built by the `board` workflow; do not edit by hand.", ""]

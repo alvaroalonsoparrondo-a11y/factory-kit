@@ -133,7 +133,7 @@
 <div id="banner"></div>
 <main class="board" id="board"></main>
 <footer>
-  <span>checks: gates · paths · scope · holdouts</span>
+  <span>checks: gates · paths · scope</span>
   <span>reviews: BMAD passes · fix rounds · human</span>
   <span id="totals"></span>
 </footer>
@@ -156,13 +156,13 @@
 
 <script>
 const POLL_MS = 4000
-const CHECKS = ['gates', 'protected-paths', 'scope-guard', 'holdouts']
-const CHECK_LABEL = { gates: 'gates', 'protected-paths': 'paths', 'scope-guard': 'scope', holdouts: 'hold' }
+const CHECKS = ['gates', 'protected-paths', 'scope-guard']
+const CHECK_LABEL = { gates: 'gates', 'protected-paths': 'paths', 'scope-guard': 'scope' }
 const COLUMNS = [
   { key: 'backlog', label: 'Backlog', who: 'planned' },
   { key: 'build', label: 'Build', who: 'lap · bmad-build' },
   { key: 'review', label: 'Review', who: 'review lenses' },
-  { key: 'ci', label: 'CI', who: 'the four checks' },
+  { key: 'ci', label: 'CI', who: 'the three checks' },
   { key: 'human', label: 'Needs you', who: 'you', cls: 'human' },
   { key: 'done', label: 'Done', who: 'merged', cls: 'done-col' },
 ]
@@ -227,7 +227,6 @@ function card(r) {
     const n = r.human_wait.stops
     meta.push(`<span title="time the lap said it waited for you">${n} stop${n === 1 ? '' : 's'} · ${Math.floor(r.human_wait.seconds / 60)} min</span>`)
   }
-  if (r.holdout_ids?.length) meta.push(`<span class="risk-high">${r.holdout_ids.map(esc).join(' ')}</span>`)
   const hint = r.needs_you && !next ? `<div class="hint">${inline(r.needs_you)}</div>` : ''
   return `
     <article class="card ${live ? 'live' : ''} ${human ? 'human' : ''} ${next ? 'next' : ''} ${col === 'done' ? 'done' : ''} ${r.stage === 'Dropped' ? 'dropped' : ''}"
