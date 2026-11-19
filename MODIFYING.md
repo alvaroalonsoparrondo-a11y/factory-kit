@@ -56,7 +56,7 @@ git push kit kit-port:port/<short-name>
 git switch main && git branch -D kit-port
 ```
 
-Then open the pull request `port/<short-name>` → `main` in the kit and merge it.
+Then open the pull request `port/<short-name>` → `main` in the kit; the agent may open it with `gh`. A human merges it.
 
 Check two things before you push:
 
@@ -74,7 +74,7 @@ git cherry-pick <kit commit>        # or several
 git push -u origin factory/update-from-kit
 ```
 
-Open the pull request in the project, add the label `human-judge-change`, and merge when the checks are green. Replace placeholders with the project's real names where the change touched such a line.
+Open the pull request in the project; the agent may open it with `gh`. A human adds the label `human-judge-change` and merges when the checks are green. Replace placeholders with the project's real names where the change touched such a line.
 
 ## Changes that need extra care
 
