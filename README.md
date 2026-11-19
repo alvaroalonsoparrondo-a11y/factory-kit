@@ -20,7 +20,7 @@ This repository is a **template**. It holds only the factory, no product.
 | Constitution and rules | `MISSION.md` (template), `FACTORY_RULES.md` | nothing |
 | The judge | `harness/`, `.github/workflows/` | Spring + Angular + Playwright; GitHub Actions |
 | BMAD rules | `_bmad/custom/`, `skills-lock.json` | BMAD v7 |
-| Agent set-up | `CLAUDE.md`, `.claude/settings.json` (permissions; the deny list is empty), `.claude/skills/lap/` (the lap) | Claude Code |
+| Agent set-up | `CLAUDE.md`, `.claude/settings.json` (permissions; the deny list is the fence), `.claude/skills/lap/` (the lap) | Claude Code |
 | Project plumbing | `.github/CODEOWNERS`, `.github/pull_request_template.md` | GitHub |
 
 BMAD's own skills are **not** in the kit. Each project installs them, so the kit stays small and BMAD upgrades stay separate from factory changes.

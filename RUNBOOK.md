@@ -18,7 +18,7 @@ You drive the factory by hand at three points: you start each lap, you merge the
    ```
 
    Then, in a Claude Code session here, say `bmad setup`. Commit what it created (`.claude/skills/`, `_bmad/`).
-3. **Check the settings.** `.claude/settings.json` must exist and parse. Its deny list is empty: the fence is off, and the agent is bound by `FACTORY_RULES.md` and `CLAUDE.md` instead (see `CHANGELOG.md`, 2026-11-18).
+3. **Check the settings.** `.claude/settings.json` must exist and parse. Its deny list is the fence: it stops the agent from editing `MISSION.md`, `FACTORY_RULES.md`, `CLAUDE.md`, `harness/`, `.github/`, `.claude/settings.json`, the `lap` skill and `_bmad/custom/`, and from force-pushing.
 4. **Create two labels** in `__PROJECT__`: `human-judge-change` and `human-approved-irreversible`.
 5. **Protect `main`** in `__PROJECT__` (Settings → Branches): require a pull request, and require these status checks: `gates`, `protected-paths`, `scope-guard`. A check can only be selected after it has run once, so open a first small pull request (for example, the filled-in `MISSION.md`, with the `human-judge-change` label) and then add the checks.
    - Approvals: 1, by someone other than the person who ran the lap. On a one-person trial: 0, because GitHub does not let you approve your own pull request.
@@ -83,5 +83,5 @@ Per lap: fix rounds; which check failed; anything the agent tried to change that
 
 ## Limits to keep in mind
 
-- There is no fence: the deny list is empty, so the rules bind the agent only by instruction. The real enforcement is the three required checks.
+- The fence here is a guard rail. A shell command can still read or write a denied path. The real enforcement is the three required checks.
 - The workflows assume Java 21 + Spring Boot + Maven in `backend/`, Angular in `frontend/`, Playwright in `e2e/`.

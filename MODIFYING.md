@@ -21,11 +21,11 @@ harness/           .github/    _bmad/custom/
 
 ## Rule 1: factory changes and product changes never share a commit
 
-Keep a factory change in its own commit, with factory files only. If a ticket needs both, make two commits. A factory change may go straight to `main`.
+A factory change touches a protected path, so in a project it already needs its own pull request with the label `human-judge-change`. Keep that pull request to factory files only. If a ticket needs both, make two pull requests.
 
-## Rule 2: a human asks for factory changes
+## Rule 2: a human makes factory changes
 
-Make the change yourself, or ask an agent session to make it. Never during a lap.
+The agent that runs laps may not edit these files, and the fence stops it. Make the change yourself, or in a separate agent session that you direct and review, on a branch named `factory/<short-name>`. Never during a lap.
 
 ## Rule 3: every factory change is written down
 
@@ -74,7 +74,7 @@ git cherry-pick <kit commit>        # or several
 git push -u origin factory/update-from-kit
 ```
 
-Merge it into the project's `main`, directly or through a pull request. Replace placeholders with the project's real names where the change touched such a line.
+Open the pull request in the project, add the label `human-judge-change`, and merge when the checks are green. Replace placeholders with the project's real names where the change touched such a line.
 
 ## Changes that need extra care
 

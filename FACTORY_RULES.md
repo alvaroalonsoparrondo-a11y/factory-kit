@@ -13,9 +13,9 @@ The agent does not implement any of the following. It stops, says which rule app
 
 A human may approve one such change by adding the label `human-approved-irreversible` to the pull request in the browser.
 
-## 2. The judge changes only when a human asks
+## 2. The judge belongs to humans
 
-A lap never creates, edits, moves or deletes these paths:
+The agent never creates, edits, moves or deletes these paths:
 
 - `MISSION.md`, `FACTORY_RULES.md`, `CLAUDE.md`
 - `harness/`
@@ -23,7 +23,7 @@ A lap never creates, edits, moves or deletes these paths:
 - `.claude/settings.json`, `.claude/skills/lap/`
 - `_bmad/custom/`
 
-If a ticket seems to need such a change, the lap stops and asks. Outside a lap, the agent may change them when the human asks for that change.
+If a ticket seems to need such a change, the agent stops and asks. A human may approve one by adding the label `human-judge-change` to the pull request.
 
 ## 3. Tests are evidence, not obstacles
 
