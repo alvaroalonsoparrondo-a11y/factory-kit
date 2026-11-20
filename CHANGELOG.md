@@ -2,6 +2,21 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-20 — GitHub Enterprise, a local kit, no Actions (from `my-factory-demo`)
+
+Seen setting up `my-factory-demo` on github.axa.com with Kiro CLI, from a local clone of the kit. The kit assumed github.com everywhere: the template did not exist on the enterprise host, so step 1 stopped; `RUNBOOK.md` and the project `README.md` were filled in with `https://github.com/...` links; `serve.py` refused a non-github.com `origin`, and it and the dispatcher defaulted to `api.github.com`. Actions is not allowed there, so `gates` and `calibrate` never ran, and step 7 then required three checks that can never report: no pull request can merge except by an admin bypass. Setup also had no way to install BMAD for one agent only, and no answer when the environment names no co-author line.
+
+- **`init-project.sh`** takes an optional third value, the host (default `github.com`), and fills in the new placeholder `__HOST__`, now used by the board link in `PROJECT_README.md` and `RUNBOOK.md` and by the kit remote.
+- **`AGENT_SETUP.md`:** optional values HOST, KIT (a template, or a local folder whose `main` is pushed into an empty repository) and AGENTS. Every `gh` call names HOST. A rule: never change organisation policy (Actions, visibility, runners) to pass a step. Step 6 checks whether Actions may run; step 7 then leaves out the required checks. Stop and ask when a given URL and PROJECT disagree. Branch protection's JSON goes through a file, because a Windows pipe garbled it (HTTP 400 "Problems parsing JSON").
+- **`RUNBOOK.md`:** a "Without GitHub Actions" section: the person runs `run-gates.sh`, reads the guard patterns, and runs `calibrate.sh` before each merge, and requires the pull request but not the checks. The kit remote may be a local folder.
+- **`serve.py`, `dispatch.py`:** host, server and API root come from `origin` (`<server>/api/v3` on GitHub Enterprise); `gh auth token` asks for that host. `GITHUB_SERVER_URL` and `GITHUB_API_URL` still override.
+- **`lap` skill (both copies):** the fallback pull request link takes its host from `origin`.
+- **`README.md`, `MODIFYING.md`:** the host, local-kit and one-agent variants of the prompt and the kit remote; `__HOST__` in the placeholder list.
+
+Tested: the board and serve tests (65) and dispatcher tests (46, one skipped) pass, with new cases for enterprise remotes; `init-project.sh` with a host on a scratch copy leaves no placeholder. Not tested: the new `AGENT_SETUP.md` end to end; the live board and dispatcher against a real GitHub Enterprise host.
+
+Still open: the judge needs Actions, so where it is not allowed the checks are the person's own discipline. Running them elsewhere (AWS CodeBuild) is planned. BMAD's setup reports version `6.13.0-next` for both modules, while the kit says "BMAD v7"; not changed until it is clear which is right.
+
 ## 2026-11-19 — Kiro CLI can run interactive laps
 
 Planned since the kit started (README "Planned"), and needed at work, where Kiro CLI is the agent and runs interactively only. Everything that tied the factory to Claude Code was in the agent set-up files; the judge and BMAD did not depend on the agent.

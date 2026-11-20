@@ -36,7 +36,7 @@ Hard rules for the whole lap (from `FACTORY_RULES.md`):
 
    Open the pull request from that file: `gh pr create --base main --head story/<ticket-id> --title "<title>" --body-file <a copy of the file without its first two lines>`. Print the pull request's URL.
 
-   If `gh` fails, print its error, the path of the file, and a link that opens the pull request form already filled in: `https://github.com/<owner>/<repo>/compare/main...story/<ticket-id>?expand=1&title=<title>&body=<body>`, with the title and body URL-encoded (take owner and repo from `git remote get-url origin`). If that link would be longer than 8000 characters, print it without `title` and `body` and say to paste them from the file.
+   If `gh` fails, print its error, the path of the file, and a link that opens the pull request form already filled in: `https://<host>/<owner>/<repo>/compare/main...story/<ticket-id>?expand=1&title=<title>&body=<body>`, with the title and body URL-encoded (take host, owner and repo from `git remote get-url origin`; the host is `github.com` or a GitHub Enterprise host). If that link would be longer than 8000 characters, print it without `title` and `body` and say to paste them from the file.
 
    Then stop. The lap now waits for CI and the human.
 

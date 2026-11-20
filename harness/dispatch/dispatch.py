@@ -13,6 +13,7 @@ Part of the judge. Human-owned. Standard library only (Python 3.11+).
   python harness/dispatch/dispatch.py verify-fence         check that a headless lap obeys the fence
 
 GitHub: FACTORY_DISPATCH_TOKEN, else GITHUB_TOKEN, else `gh auth token`. None of them reaches a lap.
+The host (github.com or GitHub Enterprise) comes from `origin`; GITHUB_API_URL overrides the API root.
 
 A local script cannot receive webhooks, so it polls: the events are the differences between two passes.
 Each pass reads ticket state the way the live board does (`harness/board/serve.py`: Git, GitHub, the
@@ -919,8 +920,8 @@ def _stage(argv):
     return code
 
 
-def github(repo_name, api):
-    token = os.environ.get("FACTORY_DISPATCH_TOKEN") or serve.gh_token()
+def github(repo_name, api, server=None):
+    token = os.environ.get("FACTORY_DISPATCH_TOKEN") or serve.gh_token(server)
     if not token and not shutil.which("gh"):
         return NoGitHub(repo_name)
     reader = serve.FallbackGitHub(board.GitHub(repo_name, token, api), repo_name) if token \
@@ -982,7 +983,7 @@ def main(argv=None):
         return 0
 
     name, server = repo.origin()
-    gh = github(name, os.environ.get("GITHUB_API_URL", "https://api.github.com"))
+    gh = github(name, os.environ.get("GITHUB_API_URL") or serve.api_for(server), server)
     if isinstance(gh, NoGitHub):
         if not args.dry_run:
             print("dispatch: no GitHub access; set FACTORY_DISPATCH_TOKEN or run `gh auth login` (RUNBOOK.md)",
