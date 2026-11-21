@@ -253,6 +253,12 @@ def ticket_markdown(t, row):
             out.append(f"| {s['at']} | {b._cell(s['kind'])} | {b._cell(s['text'])} | {waited} |")
         hw = row["human_wait"]
         out += ["", f"{hw['stops']} stop{'s' if hw['stops'] != 1 else ''}, {minutes(hw['seconds'])} in total.", ""]
+    if row.get("rounds"):
+        rd = row["rounds"]
+        out += ["## Rounds", "", f"{b.lap_round.text_of(rd)} used. From the lap's own record (`.lap/`).", "",
+                "| # | Source | What the check found |", "|---|---|---|"]
+        out += [f"| {r.get('n', '')} | {b._cell(r.get('source', ''))} | {b._cell(r.get('text', ''))} |" for r in rd["rounds"]]
+        out.append("")
     findings = (row.get("reviews") or {}).get("findings")
     if findings:
         out += [f"**Reviews:** {row['reviews']['bmad']} BMAD passes, {b.findings_text(findings)}.", ""]

@@ -8,6 +8,8 @@ persistent_facts = [
   "file:{project-root}/harness/README.md",
   "This build runs inside a factory lap. The plan must cover exactly one ticket and must not touch any protected path named in FACTORY_RULES.md.",
   "Every acceptance criterion in the plan needs an automated test that fails without the change: a backend test, a frontend unit test, or a Playwright journey in e2e/.",
+  "Review loopbacks draw on the lap's round budget, not on step 4's own limit of 5. Before each loopback (intent_gap or bad_plan), and before incrementing `review_loop_iteration`, run `python harness/board/lap_round.py <ticket ref> take review \"<the triggering finding>\"`. Exit 0: loop back. Any other exit: do not loop back; HALT, keep the plan and its Review Triage Log as they are, and return to the lap skill, which stops the lap. Patches applied in the same review pass take no round: they are not reviewed again.",
+  "Fix the cause, not the instance: when a finding names one place, find every place the same cause shows and fix them all in the same pass. A blocking finding that comes back after a loopback that claimed to fix it is not looped on again; `lap_round.py` refuses it and the lap stops.",
 ]
 
 # Always review with the full set of lenses.

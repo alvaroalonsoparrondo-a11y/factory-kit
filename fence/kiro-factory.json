@@ -22,13 +22,14 @@
           ".claude/skills/lap/**",
           ".kiro/agents/**",
           ".kiro/skills/lap/**",
-          "_bmad/custom/**"
+          "_bmad/custom/**",
+          ".lap/*.jsonl"
         ],
         "effect": "deny"
       },
       {
         "capability": "shell",
-        "match": ["git push --force*", "git push -f*"],
+        "match": ["git push --force*", "git push -f*", "*lap_round.py* grant*"],
         "effect": "deny"
       }
     ]

@@ -102,12 +102,12 @@ python harness/dispatch/dispatch.py tick --loop 5 --no-agents
 
 - a lap that stopped for you (its `lap_signal.py` wait), with the command to open its session: `claude --resume <session id>` in its worktree;
 - a lap that is quiet for an hour while its process runs (it may have hung; end the process to stop it);
-- stopped laps, never retried until you `release` them: an error exit, no push, a fix round that pushed nothing, still red after 3 fix rounds, a blocked ticket;
+- stopped laps, never retried until you `release` them: an error exit, no push, a fix round that pushed nothing, a spent round budget (see "The round budget" below), behind `main` after 3 main-moved rounds, a blocked ticket;
 - a red guard (label it or send it back), and green pull requests to review and merge;
 - ready human-in-the-loop tickets, and laps you started by hand (reported, never touched);
 - post-merge actions (below).
 
-A usage limit or an outage is not a stop: the lap's session is resumed 30 minutes later (up to six times), and it does not count as a fix round.
+A usage limit or an outage is not a stop: the lap's session is resumed 30 minutes later (up to six times), and it takes no round.
 
 **Post-merge actions.** A ticket may carry steps a human takes after its merge; until each check holds, it is listed under "Needs you" and the tickets after it wait:
 
@@ -127,7 +127,7 @@ The board is one page with a row per ticket: its stage, its status, what it need
 
 - The `board` workflow rebuilds it on every push to `main` or a `story/` branch, on every pull request change, and when a check finishes. To rebuild by hand, run the `board` workflow from the Actions tab.
 - It is built from Git, GitHub and the BMAD files. It stores nothing itself, and the lap agent cannot write to it.
-- Reviews are shown as three numbers: BMAD review passes / fix rounds / human reviews. Passes are counted from the plan's Review Triage Log, followed by its findings (found, patched, deferred) when the table can be read.
+- Reviews are shown as three numbers: BMAD review passes / rounds used / human reviews. The live board counts rounds from the lap's own record; the `board` workflow, which cannot see it, counts the commits CI judged after the first. Passes are counted from the plan's Review Triage Log, followed by its findings (found, patched, deferred) when the table can be read.
 - A merged pull request counts as done.
 - Work that is not pushed is not on the board. The lap pushes its branch when it starts, so this is only the first minute of a lap.
 - Anything the board cannot read is listed under "Problems" at the bottom.
@@ -154,12 +154,21 @@ After two or three tickets, add deliberate defects (see `harness/mutations/READM
 
 ## What to record
 
-Per lap: fix rounds; which check failed; anything the agent tried to change that it should not. When a lap shows a problem in the factory itself, fix it as [MODIFYING.md](MODIFYING.md) describes and add it to the kit's `CHANGELOG.md`.
+Per lap: rounds used, by source; which check failed; anything the agent tried to change that it should not. When a lap shows a problem in the factory itself, fix it as [MODIFYING.md](MODIFYING.md) describes and add it to the kit's `CHANGELOG.md`.
 
 ## Limits to keep in mind
 
 - The fence here is a guard rail, for both agents. A shell command can still read or write a denied path. The real enforcement is the three required checks.
 - The workflows assume Java 21 + Spring Boot + Maven in `backend/`, Angular in `frontend/`, Playwright in `e2e/`.
+
+## The round budget
+
+Every lap has one budget of **3 rounds** (`harness/rounds.json`), shared by every check. A round is a fix that is checked again: a review loopback in `bmad-build`, a red local gate fixed and run again, a red check on the pull request, a failed runtime check, a merge of `main` that needed conflicts resolved. The first run of a check, a clean merge of `main`, and a failure of the machine (a usage limit, a missing tool, a lost network) take no round.
+
+- **How it is kept.** Before each such fix the lap runs `python harness/board/lap_round.py <ref> take <source> "<finding>"`, which records the round in `.lap/<ref>.jsonl` next to the lap's signals. The dispatcher also counts the fix rounds it starts and uses whichever count is higher, so deleting the record buys nothing. `lap_round.py <ref> status` shows the count; the live board shows it on the ticket.
+- **How a lap stops.** When the budget is spent, `take` refuses and itself marks the lap as waiting (`limit`), with every finding so far. It also refuses when the same check reports the same finding as the round before: the fix did not reach the cause, and another round would spend the budget one symptom at a time (that stop is a `decision`).
+- **What you do then.** Usually: ask the product owner skill to split or rewrite the ticket. If one more round is worth it: `python harness/board/lap_round.py <ref> grant 1 "<why>"` in the lap's checkout, then tell the lap to go on (for a dispatched lap, `release` it). A `release` alone gives no rounds. The fence denies `grant` to the agent.
+- **Changing the budget.** Edit `budget` in `harness/rounds.json`: one number for the whole factory.
 
 ## Without GitHub Actions
 

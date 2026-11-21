@@ -45,8 +45,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "board"))
 import board  # noqa: E402  (ticket state from Git, GitHub and the BMAD files)
 import serve  # noqa: E402  (the live board's snapshot: worktrees, lap signals, quiet time)
+import lap_round  # noqa: E402  (the lap's round budget, shared by every check: harness/rounds.json)
 
-MAX_FIX_ROUNDS = 3
+# A clean merge of main is not a round (it says nothing about the ticket), but a lap that falls behind
+# again and again is spending without progress: after this many, it stops for the human.
+MAX_MOVED_ROUNDS = 3
 DEFAULT_CAP = 2
 BASE_PORT = 8090  # 8080 is the human's app, 8081 a hand-started worktree lap
 QUIET_MINUTES = 60  # a running lap with no file change for this long has probably died without ending
@@ -722,9 +725,11 @@ class Dispatcher:
         if fix:
             if run.get("handled_sha") == head and run["stage"] == "fix":
                 return halt(f"fix round {run['fix_rounds']} pushed nothing new; read {run.get('log')}.")
-            if run["fix_rounds"] >= MAX_FIX_ROUNDS:
-                return halt(f"still red after {MAX_FIX_ROUNDS} fix rounds ({', '.join(fix)}): ask the product owner "
-                            "to split or rewrite the ticket.")
+            used, budget, text = self._rounds(run, r)
+            if used >= budget:
+                return halt(f"round budget spent, still red ({', '.join(fix)}): {text}. Ask the product owner to "
+                            f"split or rewrite the ticket, or grant a round: `python harness/board/lap_round.py {ref} "
+                            "grant 1 \"<why>\"` in the lap's worktree, then `release` it.")
             if busy >= self.cap or not self.headless_ok:
                 rep["waiting"].append((ref, f"red ({', '.join(fix)}), waiting for a free slot"))
                 return busy
@@ -744,6 +749,9 @@ class Dispatcher:
         if head and not self.repo.contains("origin/main", f"origin/{run['branch']}"):
             if run.get("handled_sha") == head and run["stage"] == "main-moved":
                 return halt(f"the main-moved round pushed nothing new; read {run.get('log')}.")
+            if run["moved_rounds"] >= MAX_MOVED_ROUNDS:
+                return halt(f"still behind main after {MAX_MOVED_ROUNDS} main-moved rounds: hold other merges or "
+                            "reorder the tickets, then release it.")
             if busy >= self.cap or not self.headless_ok:
                 rep["waiting"].append((ref, "behind main, waiting for a free slot"))
                 return busy
@@ -787,9 +795,10 @@ class Dispatcher:
                 run["handled_sha"] = head
                 ids = f" {', '.join(r.get('holdout_ids') or [])}" if "holdouts" in fix and r.get("holdout_ids") else ""
                 run["failed_checks"].append(", ".join(fix) + ids)
-            if run["fix_rounds"] > MAX_FIX_ROUNDS:
-                rep["needs_you"].append((ref, f"still red after {MAX_FIX_ROUNDS} fix rounds: ask the product owner to "
-                                              "split or rewrite the ticket"))
+            used, budget, text = self._rounds(run, r, pending=1)
+            if used > budget:
+                rep["needs_you"].append((ref, f"round budget spent, still red: {text}. Ask the product owner to "
+                                              "split or rewrite the ticket, or grant a round"))
             else:
                 rep["needs_you"].append((ref, f"fix round: say `lap {ref} fix round` {where} and paste the failing "
                                               f"{', '.join(fix)} check"))
@@ -803,6 +812,17 @@ class Dispatcher:
         else:
             rep["waiting"].append((ref, r["stage"]))
 
+    @staticmethod
+    def _rounds(run, r, pending=0):
+        """(used, budget, text): the lap's own round record and the dispatcher's own count, whichever is higher.
+
+        Two counts on purpose: the lap's record (`.lap/`) sees its review and local-gate rounds, the dispatcher's
+        sees every fix round it started. Neither can be reset by the agent alone."""
+        s = r.get("rounds") or lap_round.summary([])
+        used = max(s["used"], run["fix_rounds"] - pending) + pending
+        return used, s["budget"], f"{used} of {s['budget']} rounds used" + (
+            f" ({', '.join(f'{k} {v}' for k, v in s['by_source'].items())})" if s["by_source"] else "")
+
     # ---- close a merged lap
 
     def _close(self, ref, run, r, ticket, main_plan, rep, runs):
@@ -810,7 +830,7 @@ class Dispatcher:
         failed = "; ".join(run["failed_checks"]) or "none"
         line = (f"{dt.date.today().isoformat()} {ref} {run.get('title', r['title'])} | {pr} | mode: {run.get('mode', 'agent')} | "
                 f"fix rounds: {run['fix_rounds']} | failed checks: {failed} | main-moved rounds: {run['moved_rounds']} | "
-                f"usage-limit pauses: {run.get('limit_retries', 0)}")
+                f"usage-limit pauses: {run.get('limit_retries', 0)} | {self._rounds(run, r)[2]}")
         marked = bool(main_plan and main_plan["status"] == "done")
         if self.dry_run:
             rep["closed"].append((ref, ("" if marked else "would mark done on main, ") + "would close: " + line))

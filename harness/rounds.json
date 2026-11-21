@@ -1,0 +1,11 @@
+{
+  "about": "One round budget per lap, shared by every check. A round is a fix that is checked again. Human-owned; see harness/README.md.",
+  "budget": 3,
+  "sources": {
+    "review": "a BMAD review loopback: the code is re-derived and reviewed again",
+    "gates": "a red local gate run, fixed and run again",
+    "runtime": "a failed runtime verification, fixed and verified again",
+    "ci": "a red required check on the pull request (CI or the factory judge), fixed and pushed",
+    "main-moved": "a merge of main that needed conflicts resolved or code changed to get green"
+  }
+}

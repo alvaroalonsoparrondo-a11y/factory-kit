@@ -372,8 +372,52 @@ class Routing(unittest.TestCase):
             self.pushed(w, sha=f"b{n}", checks={**GREEN, "gates": "red"})
             rep = w.tick()
         self.assertEqual(w.run("1.1")["fix_rounds"], 3)
-        self.assertIn("still red after 3 fix rounds", dict(rep["needs_you"])["1.1"])
+        self.assertIn("round budget spent, still red (gates): 3 of 3 rounds used", dict(rep["needs_you"])["1.1"])
         self.assertEqual(len(w.runner.started), 4)
+
+    def rounds(self, w, *sources, grants=0):
+        events = [{"at": "2027-01-15T08:00:00+00:00", "state": "round", "source": s, "text": f"finding {n}", "n": n}
+                  for n, s in enumerate(sources, 1)]
+        events += [{"at": "2027-01-15T09:00:00+00:00", "state": "grant", "n": grants, "text": "ok"}] if grants else []
+        w.snapshot["signals"] = {"1.1": events}
+
+    def test_the_laps_own_rounds_share_the_budget(self):
+        w = self.started_lap()
+        self.rounds(w, "review", "gates")  # two rounds before CI saw the pull request
+        self.pushed(w, sha="b1", checks={**GREEN, "gates": "red"})
+        w.tick()
+        self.assertEqual(w.run("1.1")["fix_rounds"], 1)  # the third and last round
+        self.rounds(w, "review", "gates", "ci")
+        self.pushed(w, sha="b2", checks={**GREEN, "gates": "red"})
+        rep = w.tick()
+        self.assertIn("3 of 3 rounds used (review 1, gates 1, ci 1)", dict(rep["needs_you"])["1.1"])
+        self.assertEqual(len(w.runner.started), 2)
+
+    def test_deleting_the_laps_record_does_not_buy_rounds(self):
+        w = self.started_lap()
+        for n in range(1, 4):
+            self.pushed(w, sha=f"b{n}", checks={**GREEN, "gates": "red"})
+            w.tick()
+        w.snapshot["signals"] = {}
+        self.pushed(w, sha="b4", checks={**GREEN, "gates": "red"})
+        self.assertIn("round budget spent", dict(w.tick()["needs_you"])["1.1"])
+
+    def test_a_human_grant_gives_one_more_round(self):
+        w = self.started_lap()
+        self.rounds(w, "review", "gates", "ci", grants=1)
+        self.pushed(w, sha="b1", checks={**GREEN, "gates": "red"})
+        rep = w.tick()
+        self.assertEqual(refs(rep["started"]), ["1.1"])
+        self.assertTrue(w.runner.started[-1]["argv"][2].startswith("lap 1.1 fix round"))
+
+    def test_more_than_three_main_moved_rounds_stop(self):
+        w = self.started_lap()
+        w.repo.behind.add("story/1.1")
+        for n in range(1, 5):
+            self.pushed(w, sha=f"m{n}", checks=GREEN)
+            rep = w.tick()
+        self.assertEqual(w.run("1.1")["moved_rounds"], 3)
+        self.assertIn("still behind main after 3 main-moved rounds", dict(rep["needs_you"])["1.1"])
 
     def test_behind_main_starts_a_main_moved_round(self):
         w = self.started_lap()

@@ -90,6 +90,7 @@ Open the pull request in the project; the agent may open it with `gh`. A human a
 | The `lap` skill | Each agent reads its own copy | Change `.claude/skills/lap/SKILL.md`, then copy it to `.kiro/skills/lap/SKILL.md`. The `gates` workflow fails while the two differ. |
 | The agent instructions | Claude Code and Kiro read one file | Change `AGENTS.md`. `CLAUDE.md` only imports it (`@AGENTS.md`); keep it that way. |
 | The runtime contract in `harness/README.md` | Gates and BMAD's architect rely on it | Update `harness/run-gates.sh` and `_bmad/custom/bmad-architecture.toml` if they mention the item. |
+| `harness/rounds.json` or `harness/board/lap_round.py` | The budget is what keeps a lap's cost bounded | Run `python -m unittest discover -s harness/board` and `-s harness/dispatch`. A new kind of check that can send work back adds a source here, not a limit of its own. |
 | `_bmad/custom/*.toml` | BMAD merges these with its defaults | Check with `uv run --no-cache _bmad/scripts/resolve_customization.py --skill .claude/skills/<skill> --project-root . --key workflow` (or `--key agent`). |
 | How a new project is set up | The steps exist in two forms: for a person and for an agent | Change `AGENT_SETUP.md` and the one-time setup in `RUNBOOK.md` together. Do not put steps in the README prompt; it only points to `AGENT_SETUP.md`. |
 | A BMAD upgrade | Skill names and customisation keys can change | Upgrade in one project first, run a lap, then update `skills-lock.json` in the kit. |
