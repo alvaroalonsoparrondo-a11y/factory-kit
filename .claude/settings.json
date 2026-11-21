@@ -1,17 +1,6 @@
 {
   "permissions": {
     "deny": [
-      "Edit(/MISSION.md)",
-      "Edit(/FACTORY_RULES.md)",
-      "Edit(/AGENTS.md)",
-      "Edit(/CLAUDE.md)",
-      "Edit(/harness/**)",
-      "Edit(/.github/**)",
-      "Edit(/.claude/settings.json)",
-      "Edit(/.claude/skills/lap/**)",
-      "Edit(/.kiro/agents/**)",
-      "Edit(/.kiro/skills/lap/**)",
-      "Edit(/_bmad/custom/**)",
       "Bash(git push --force*)",
       "Bash(git push -f*)"
     ]

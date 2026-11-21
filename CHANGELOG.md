@@ -2,6 +2,16 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-21 — The fence is off in the kit, on in projects
+
+Seen in the kit: the fence that keeps a lap agent out of the factory files also blocked every agent session that was changing the kit itself, which is the kit's whole purpose. No laps run in the kit.
+
+- **`fence/claude-settings.json` and `fence/kiro-factory.json` (new)** hold the fenced settings. `init-project.sh` copies them to `.claude/settings.json` and `.kiro/agents/factory.json` and deletes `fence/`, so every project starts fenced as before.
+- **The kit's own `.claude/settings.json` and `.kiro/agents/factory.json`** deny only force pushes.
+- **`judge-guards.yml`:** `protected-paths` skips a template repository (the kit). `scope-guard` is unchanged.
+- **`FACTORY_RULES.md` section 2** says it applies in projects, not in the kit.
+- **`MODIFYING.md`, `README.md`:** a fence change is made in `fence/` in the kit and moved to the live paths when carried to a project.
+
 ## 2026-11-19 — Kiro CLI can run interactive laps
 
 Planned since the kit started (README "Planned"), and needed at work, where Kiro CLI is the agent and runs interactively only. Everything that tied the factory to Claude Code was in the agent set-up files; the judge and BMAD did not depend on the agent.

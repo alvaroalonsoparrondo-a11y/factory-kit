@@ -15,6 +15,8 @@ A human may approve one such change by adding the label `human-approved-irrevers
 
 ## 2. The judge belongs to humans
 
+This rule applies in projects made from the kit. It does not apply in `factory-kit` itself.
+
 The agent never creates, edits, moves or deletes these paths:
 
 - `MISSION.md`, `FACTORY_RULES.md`, `AGENTS.md`, `CLAUDE.md`

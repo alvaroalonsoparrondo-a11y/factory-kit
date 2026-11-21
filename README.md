@@ -24,6 +24,8 @@ This repository is a **template**. It holds only the factory, no product.
 | | `AGENTS.md`, `.kiro/agents/factory.json` (the agent; its deny rules are the fence), `.kiro/skills/lap/` (a copy of the lap, kept equal by `gates`) | Kiro CLI |
 | Project plumbing | `.github/CODEOWNERS`, `.github/pull_request_template.md` | GitHub |
 
+The fence is **off in the kit itself**: the kit's own agent settings deny no paths, and `protected-paths` skips it. The fenced settings live in `fence/`, and `init-project.sh` switches them on in every new project. See [MODIFYING.md](MODIFYING.md).
+
 BMAD's own skills are **not** in the kit. Each project installs them, so the kit stays small and BMAD upgrades stay separate from factory changes.
 
 ## Start a new project

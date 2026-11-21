@@ -16,6 +16,12 @@ for f in $files; do
   echo "filled in: $f"
 done
 
+# Switch the fence on. The kit itself runs without it; the fenced settings wait in fence/.
+cp -- fence/claude-settings.json .claude/settings.json
+cp -- fence/kiro-factory.json .kiro/agents/factory.json
+rm -rf -- fence
+echo "fence on: installed .claude/settings.json and .kiro/agents/factory.json from fence/"
+
 # A project gets its own README; the kit-only documents go.
 mv -- PROJECT_README.md README.md
 rm -f -- AGENT_SETUP.md CHANGELOG.md
