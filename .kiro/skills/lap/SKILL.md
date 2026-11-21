@@ -37,10 +37,19 @@ Hard rules for the whole lap (from `FACTORY_RULES.md`):
      - `environment`: the machine failed (a download, a port in use, a missing tool). No round: signal `waiting manual-step "<its evidence line>"` and stop.
      - `inherited`: the gates are red on `origin/main` alone, too. No round: signal `waiting decision "main is red: <its evidence>"` and stop.
      - `timeout`: no round on its own. Look at the log for a hang the change caused; if there is one, it is `introduced`; if not, signal `waiting manual-step` and stop.
+   - **Then, runtime verification**, once the gates are green. A separate agent with no context exercises the running app against the ticket's scenario (`docs/runtime/<ticket-id>.json`, written by the product owner and read from `main`), and a script judges its evidence:
+     1. `python harness/runtime/verify.py <ticket-id> start --port <port>`. `skipped` (no scenario, or no backend yet): go on, and say so in the pull request. `started`: its second line is the verifier's prompt. Exit 2 (the scenario on the branch differs from `main`, or is not on `main`): restore it from `main` or stop and say so; never change it. Anything else, or `inconclusive`: no round; signal `waiting manual-step "<its reason>"` and stop.
+     2. Launch a context-free subagent with exactly this prompt: `Read <the prompt path> with your Read tool and follow it exactly.` Give it nothing else: not the plan, the diff, the ticket or your opinion. If your agent cannot launch a subagent, run `verify.py <ticket-id> stop`, signal `waiting manual-step "runtime verification needs a subagent"` and stop.
+     3. `python harness/runtime/verify.py <ticket-id> check`. It prints one word first:
+        - `verified`: go on.
+        - `malformed`: the verifier broke the report's rules. Go back to 1 once; the script gives it the reason and counts the attempts.
+        - `failed`: the app does not do what the scenario says. Take a round (`take runtime "<the failed assertions and what was observed>"`), fix the application, then run the gates again from the top of this step, and runtime verification after them.
+        - `inconclusive`: something could not be judged. No round: signal `waiting decision "<its reason>"` and stop.
+     4. Never run the verifier's checks yourself instead, and never edit its report or evidence.
 8. **Push.** `git fetch origin`. If `origin/main` has moved since the branch was cut, do section D first. Then `git push`. Nothing else.
 9. **Hand over.** Write the pull request text to `.lap/<ticket-id>-pr.md`. Git ignores `.lap/`; never commit it.
    - First line: the title, `<ticket-id>: <ticket title>`. Then one blank line.
-   - Then the body, filling in every part of `.github/pull_request_template.md`: the ticket, what changed, the local gate result with the candidate id it printed, the rounds used (`lap_round.py <ticket-id> status`), each assumption made on an open question in `MISSION.md`, and anything deferred.
+   - Then the body, filling in every part of `.github/pull_request_template.md`: the ticket, what changed, the local gate result with the candidate id it printed, the runtime verification result (`python harness/runtime/verify.py <ticket-id> summary`), the rounds used (`lap_round.py <ticket-id> status`), each assumption made on an open question in `MISSION.md`, and anything deferred.
 
    Open the pull request from that file: `gh pr create --base main --head story/<ticket-id> --title "<title>" --body-file <a copy of the file without its first two lines>`. Print the pull request's URL.
 

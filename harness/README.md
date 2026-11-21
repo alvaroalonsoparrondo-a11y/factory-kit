@@ -39,3 +39,7 @@ Until the walking skeleton exists there is nothing to judge and the script passe
 `harness/rounds.json` holds the one budget every lap shares across all its checks: 3 rounds, a round being a fix that is checked again. `harness/board/lap_round.py` records and enforces it; the lap skill, `bmad-build`'s review loopbacks and the dispatcher all draw on it. See `RUNBOOK.md`, "The round budget".
 
 `harness/judge/classify.py` says why red gates are red: `introduced` (a round), `environment` or `inherited` (no round), or `timeout`. The lap's local gates and the factory judge both ask it, so the agent never decides it. Its machine-failure patterns are kept narrow on purpose.
+
+## Runtime verification
+
+`harness/runtime/verify.py` starts the app as the runtime contract says (fresh `APP_DATA_DIR`, health, build identity), hands a context-free verifier `harness/runtime/verifier.md` with the ticket's scenario from `docs/runtime/<ref>.json` on `main`, and judges its report and evidence. See `RUNBOOK.md`, "Runtime verification".

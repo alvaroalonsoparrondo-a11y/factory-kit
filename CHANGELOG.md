@@ -2,6 +2,43 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-21 — Runtime verification: another agent checks the running app
+
+Seen in planning topic 2: the gates prove that the tests the builder wrote pass, and Playwright's journeys are written by the same agent that builds the ticket. Nothing independent asked whether the running app does what the ticket says.
+
+- **`harness/runtime/verify.py` and `verifier.md` (new, with tests):** after Archon's `archon-verify-runtime`, scripts around one agent step.
+  - `start`: a fresh app with empty data, its build identity checked, a new and unique evidence folder, and the verifier's prompt.
+  - A context-free subagent follows that prompt.
+  - `check`: stops the app and judges the report:
+    - every assertion is covered exactly once;
+    - each one has exactly one non-empty evidence file inside the attempt's folder;
+    - the identity matches the build under test;
+    - nothing was written into the checkout.
+  - The result is `verified`, `failed` (a `runtime` round), `inconclusive` (no round, a human looks) or `malformed` (one fresh attempt, with the reason, then `inconclusive`).
+- **The scenario** is `docs/runtime/<ref>.json`, one assertion per acceptance criterion.
+  - `bmad-agent-po.toml` has the product owner write it at planning, committed to `main` before the lap.
+  - `verify.py` reads it from `origin/main` and refuses a branch whose copy differs. That is the `pull_request_target` idea: the change cannot edit what judges it.
+  - `bmad-build.toml` tells the builder not to touch it. No scenario, or no backend yet, is `skipped`, and the pull request says so.
+- **`lap` skill (both copies), step 7:** runtime verification after green gates. The subagent gets the prompt path and nothing else. A `failed` result takes a round and goes back to the gates. The pull request carries `verify.py <ref> summary`, and so does the template.
+
+Lessons kept from Archon:
+1. An agent's report is checked by a script, never trusted.
+2. Evidence is raw tool output saved by the tool, one file per assertion, inside a fresh folder per attempt.
+3. A malformed report gets one fresh attempt with the checker's reason, never the earlier observations.
+4. The verifier writes nothing in the checkout. The prompt says to start every command with `cd` to the attempt folder, and the checker compares `git status` before and after.
+5. Identity is probed from the running app, not taken from Git.
+
+Tested: 15 tests in `harness/runtime`, with a stand-in app that keeps the runtime contract, real Git and a scripted verifier:
+- verified, failed, inconclusive, and malformed-then-retried;
+- evidence outside the folder, or empty;
+- the build identity disagreeing;
+- a stray file in the checkout;
+- the scenario changed on the branch, or only on the branch;
+- skipped;
+- an app that does not start, and one that reports another build.
+
+Not tested yet: a real Spring app with a real subagent as the verifier. Still open: running it in CI or the factory judge, and making it a required check.
+
 ## 2026-11-21 — Why the gates are red: the change, main, or the machine
 
 Seen in planning topic 2, and in Archon's incident log (2026-10-25): an attempt cap that counted a broken toolchain against the work parked good tickets as `needs-owner`. The round budget had the same gap. Every red gate looked like the change's fault, so a lost network or a red `main` spent a lap's rounds, and the dispatcher started fix rounds that could not succeed.
