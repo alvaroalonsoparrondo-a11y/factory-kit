@@ -16,7 +16,18 @@ class Helpers(unittest.TestCase):
         self.assertEqual(s.repo_from_url("https://github.com/o/r.git\n"), "o/r")
         self.assertEqual(s.repo_from_url("git@github.com:o/r.git"), "o/r")
         self.assertEqual(s.repo_from_url("https://github.com/o/r"), "o/r")
-        self.assertIsNone(s.repo_from_url("https://example.com/o/r.git"))
+        self.assertEqual(s.repo_from_url("https://github.example.com/o/r.git"), "o/r")
+        self.assertEqual(s.repo_from_url("git@github.example.com:o/r.git"), "o/r")
+        self.assertIsNone(s.repo_from_url("C:\\work\\factory-kit"))
+        self.assertIsNone(s.repo_from_url("https://github.com/o"))
+
+    def test_server_and_api_from_origin(self):
+        self.assertEqual(s.server_from_url("https://github.com/o/r.git"), "https://github.com")
+        self.assertEqual(s.server_from_url("git@github.example.com:o/r.git"), "https://github.example.com")
+        self.assertEqual(s.server_from_url("https://user@github.example.com/o/r"), "https://github.example.com")
+        self.assertIsNone(s.server_from_url("/srv/git/factory-kit"))
+        self.assertEqual(s.api_for("https://github.com"), "https://api.github.com")
+        self.assertEqual(s.api_for("https://github.example.com/"), "https://github.example.com/api/v3")
 
     def test_ticket_markdown(self):
         t = {"ref": "1.2", "title": "Redirect", "risk": "high", "covers": ["R5"], "after": ["1"],

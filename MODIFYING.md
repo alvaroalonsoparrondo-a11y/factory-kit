@@ -46,7 +46,8 @@ Add an entry to `CHANGELOG.md` in the same commit: what went wrong, in which pro
 One-time, in the project clone:
 
 ```bash
-git remote add kit https://github.com/<owner>/factory-kit.git
+git remote add kit https://<host>/<owner>/factory-kit.git   # <host>: github.com or your GitHub Enterprise host
+# or, if the kit exists only as a local clone: git remote add kit <path to factory-kit>
 ```
 
 For each factory change, after its pull request merged in the project:
@@ -63,7 +64,7 @@ Then open the pull request `port/<short-name>` → `main` in the kit; the agent 
 
 Check two things before you push:
 
-1. **No project names.** The kit uses the placeholders `__OWNER__`, `__PROJECT__` and `__PARENT_DIR__`. If the change touched a line that holds a real name in the project (`.github/CODEOWNERS`, `.claude/settings.json`, `RUNBOOK.md`), put the placeholder back.
+1. **No project names.** The kit uses the placeholders `__OWNER__`, `__PROJECT__`, `__PARENT_DIR__` and `__HOST__`. If the change touched a line that holds a real name in the project (`.github/CODEOWNERS`, `.claude/settings.json`, `RUNBOOK.md`, `README.md`), put the placeholder back.
 2. **No product.** `git show --stat` must list factory files only.
 
 If the pull request was squash-merged, cherry-pick the squashed commit on `main`.

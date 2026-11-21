@@ -32,7 +32,7 @@ BMAD's own skills are **not** in the kit. Each project installs them, so the kit
 
 1. On GitHub: **Use this template** on `factory-kit` → `<project>`, private.
 2. Clone it.
-3. Run the one-time script `bash init-project.sh <github-owner> <project>`, then commit.
+3. Run the one-time script `bash init-project.sh <github-owner> <project>` (add the host as a third value on GitHub Enterprise), then commit.
 4. Follow [RUNBOOK.md](RUNBOOK.md).
 
 ## Start a new project with an agent
@@ -41,7 +41,7 @@ Instead of the manual steps above, hand the setup to an agent. The steps live in
 
 1. Open an agent session (Claude Code or Kiro CLI) in the **parent folder** where the new project should be cloned. Do not use a session opened inside an existing factory project: its rules would apply to the setup.
 2. The machine needs `git`, `gh` (signed in, with the `repo` and `workflow` scopes), Node, `uv`, and Git Bash on Windows.
-3. Fill in the three values and send this prompt:
+3. Fill in the three values and send this prompt. On GitHub Enterprise, add a `Host:` line and pass `--hostname <host>` to `gh api`. If the kit exists only as a local clone, add `Kit: <path to factory-kit>` and read `AGENT_SETUP.md` from that folder instead. To set up for one agent only, add `Agents: kiro-cli` (or `claude-code`).
 
 ~~~text
 Set up a new software-factory project from my factory kit.

@@ -6,7 +6,7 @@ You drive the factory by hand at three points: you start each lap, you merge the
 
 ## One-time setup
 
-1. **Fill in the placeholders** (only if `init-project.sh` is still in this folder): `bash init-project.sh __OWNER__ __PROJECT__`, then commit and push.
+1. **Fill in the placeholders** (only if `init-project.sh` is still in this folder): `bash init-project.sh __OWNER__ __PROJECT__`, then commit and push. On GitHub Enterprise, add the host as a third value: `bash init-project.sh __OWNER__ __PROJECT__ github.example.com`.
 2. **Install BMAD v7** in this folder (needs Node and `uv`):
 
    ```bash
@@ -23,7 +23,8 @@ You drive the factory by hand at three points: you start each lap, you merge the
 5. **Protect `main`** in `__PROJECT__` (Settings → Branches): require a pull request, and require these status checks: `gates`, `protected-paths`, `scope-guard`. A check can only be selected after it has run once, so open a first small pull request (for example, the filled-in `MISSION.md`, with the `human-judge-change` label) and then add the checks.
    - Approvals: 1, by someone other than the person who ran the lap. On a one-person trial: 0, because GitHub does not let you approve your own pull request.
    - On a free GitHub plan, branch protection is not enforced on private repositories. The checks still run and show red or green; you have to respect them yourself.
-6. **Link the kit**, so factory changes can travel: `git remote add kit https://github.com/__OWNER__/factory-kit.git`
+   - Where GitHub Actions is not allowed (see "Without GitHub Actions" below), require the pull request but not the three checks: they can never report, so no pull request could merge except by an admin bypassing the rule.
+6. **Link the kit**, so factory changes can travel: `git remote add kit https://__HOST__/__OWNER__/factory-kit.git`. If the kit exists only as a local clone, give its folder instead: `git remote add kit <path to factory-kit>`.
 
 ## Plan the product (BMAD, interactive, in this folder)
 
@@ -122,7 +123,7 @@ done_when = "file:harness/skeleton.lock"
 
 The board is one page with a row per ticket: its stage, its status, what it needs from you, and how often it was reviewed. Open `BOARD.md` on the `board` branch:
 
-`https://github.com/__OWNER__/__PROJECT__/blob/board/BOARD.md`
+`https://__HOST__/__OWNER__/__PROJECT__/blob/board/BOARD.md`
 
 - The `board` workflow rebuilds it on every push to `main` or a `story/` branch, on every pull request change, and when a check finishes. To rebuild by hand, run the `board` workflow from the Actions tab.
 - It is built from Git, GitHub and the BMAD files. It stores nothing itself, and the lap agent cannot write to it.
@@ -139,7 +140,7 @@ python harness/board/serve.py
 
 Then open `http://127.0.0.1:8765`. It shows the same tickets as columns of cards (Backlog, Build, Review, CI, Needs you, Done), refreshes every few seconds, and opens a ticket's entry, plan, epic and pull request text when you click its card.
 
-- It uses your own `gh` login (or `GITHUB_TOKEN`) for pull requests and checks; without either it shows Git only.
+- It uses your own `gh` login (or `GITHUB_TOKEN`) for pull requests and checks; without either it shows Git only. On GitHub Enterprise it takes the host from `origin` and asks `gh` for that host's login; `GITHUB_SERVER_URL` and `GITHUB_API_URL` override it.
 - The branch checked out in this folder is read from the working tree, so a running lap shows its plan before it is pushed.
 - It binds `127.0.0.1` only.
 - **A lap that waits for you** goes to "Needs you" with the reason and how long it has waited, for example "Approve the plan (approval, waiting 12 min)". The lap writes this itself with `python harness/board/lap_signal.py` into `.lap/<ticket-id>.jsonl`, so it is the agent's own word, never evidence. A wait is dropped once the branch has a newer commit, or the ticket is done.
@@ -159,3 +160,15 @@ Per lap: fix rounds; which check failed; anything the agent tried to change that
 
 - The fence here is a guard rail, for both agents. A shell command can still read or write a denied path. The real enforcement is the three required checks.
 - The workflows assume Java 21 + Spring Boot + Maven in `backend/`, Angular in `frontend/`, Playwright in `e2e/`.
+
+## Without GitHub Actions
+
+Some organisations' GitHub (often GitHub Enterprise) does not allow Actions. Check with `gh api repos/__OWNER__/__PROJECT__/actions/permissions`: `"enabled": false` means no workflow runs. Do not switch Actions on without your organisation's approval. Then the judge does not run on GitHub, and you stand in for it:
+
+- **`gates`:** run `bash harness/run-gates.sh` on the lap's branch before you merge, and merge only when it exits 0.
+- **`protected-paths` and `scope-guard`:** read the pull request's changed files against the two patterns in `.github/workflows/judge-guards.yml`. A hit needs your decision, as the labels would record it.
+- **`calibrate`:** run `bash harness/calibrate.sh` locally.
+- **The board** on the `board` branch is not rebuilt; use the live board (`python harness/board/serve.py`).
+- **Branch protection:** require the pull request, not the checks (see one-time setup, step 5).
+
+This is weaker than the required checks: nothing stops a merge you did not check. Running the judge elsewhere (for example AWS CodeBuild) is planned, not built.

@@ -8,6 +8,8 @@ Part of the judge. Human-owned. Standard library only (Python 3.11+).
 Then open http://127.0.0.1:8765. It reads what board.py reads: Git (it runs `git fetch`
 every 30 seconds), the BMAD files, and GitHub through your own `gh` login (`gh auth token`)
 or GITHUB_TOKEN. With neither, it shows Git only: no pull requests or checks.
+The GitHub host (github.com or GitHub Enterprise) comes from `origin`; GITHUB_SERVER_URL and
+GITHUB_API_URL override it.
 
 The branch checked out here, and every `story/*` branch checked out in another worktree
 of this repository, is read from its working tree, so a running lap shows its plan
@@ -38,17 +40,35 @@ FETCH_SECONDS = 30
 GITHUB_SECONDS = 60
 
 
+_REMOTE = re.compile(r"^(?:https?://(?:[^@/]+@)?([^/]+)/|git@([^:]+):)([^/]+)/([^/]+?)(?:\.git)?/?$")
+
+
 def repo_from_url(url):
-    """`owner/name` from a GitHub remote URL, or None."""
-    m = re.search(r"github\.com[:/]+([^/]+)/([^/]+?)(?:\.git)?/?$", url.strip())
-    return f"{m.group(1)}/{m.group(2)}" if m else None
+    """`owner/name` from a GitHub remote URL (github.com or a GitHub Enterprise host), or None."""
+    m = _REMOTE.match(url.strip())
+    return f"{m.group(3)}/{m.group(4)}" if m else None
 
 
-def gh_token():
+def server_from_url(url):
+    """`https://<host>` of a GitHub remote URL, or None."""
+    m = _REMOTE.match(url.strip())
+    return f"https://{m.group(1) or m.group(2)}" if m else None
+
+
+def api_for(server):
+    """REST API root for a GitHub server: api.github.com, or <server>/api/v3 on GitHub Enterprise."""
+    server = server.rstrip("/")
+    return "https://api.github.com" if server == "https://github.com" else f"{server}/api/v3"
+
+
+def gh_token(server=None):
+    """GITHUB_TOKEN, else `gh auth token` for the server's host (gh's default host if none is given)."""
     if os.environ.get("GITHUB_TOKEN"):
         return os.environ["GITHUB_TOKEN"]
+    host = server.split("://", 1)[-1].rstrip("/") if server else None
     try:
-        done = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, timeout=10)
+        done = subprocess.run(["gh", "auth", "token", *(["--hostname", host] if host else [])],
+                              capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.TimeoutExpired):
         return None
     return done.stdout.strip() if done.returncode == 0 and done.stdout.strip() else None
@@ -426,15 +446,16 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     root = b.git(args.root, "rev-parse", "--show-toplevel").strip()
-    repo = os.environ.get("GITHUB_REPOSITORY") or repo_from_url(b.git(root, "remote", "get-url", "origin"))
+    origin = b.git(root, "remote", "get-url", "origin")
+    repo = os.environ.get("GITHUB_REPOSITORY") or repo_from_url(origin)
     if not repo:
         print("serve: origin is not a GitHub repository; set GITHUB_REPOSITORY", file=sys.stderr)
         return 2
-    token = gh_token()
-    api = os.environ.get("GITHUB_API_URL", "https://api.github.com")
+    server = os.environ.get("GITHUB_SERVER_URL") or server_from_url(origin) or "https://github.com"
+    token = gh_token(server)
+    api = os.environ.get("GITHUB_API_URL") or api_for(server)
     gh = CachedGitHub(FallbackGitHub(b.GitHub(repo, token, api), repo), GITHUB_SECONDS) if token else NoGitHub(repo)
-    source = Source(root, repo, gh, os.environ.get("GITHUB_SERVER_URL", "https://github.com"),
-                    quiet_seconds=args.quiet_minutes * 60)
+    source = Source(root, repo, gh, server, quiet_seconds=args.quiet_minutes * 60)
     threading.Thread(target=source.run, daemon=True).start()
     httpd = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(source))
     print(f"Board for {repo} at http://127.0.0.1:{args.port}"
