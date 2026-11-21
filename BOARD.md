@@ -1,6 +1,6 @@
 # Board: factory-kit
 
-Built from `main` at `06a43c1`
+Built from `main` at `270a8d7`
 
 No tickets yet. The board fills in once a `tickets.toml` is on `main`.
 
