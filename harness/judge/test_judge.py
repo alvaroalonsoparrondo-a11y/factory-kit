@@ -409,6 +409,10 @@ class WorkspaceTests(unittest.TestCase):
         self.assertFalse(path.exists())
         return code, env, log.read_text()
 
+    def test_the_judges_folder_leaves_the_clone_clean(self):
+        self.gate()
+        self.assertEqual(git(self.clone, "status", "--porcelain"), "")
+
     def test_main_passes_and_the_gate_sees_no_token(self):
         code, env, _ = self.gate()
         self.assertEqual(code, 0)

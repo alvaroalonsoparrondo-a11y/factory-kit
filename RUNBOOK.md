@@ -165,13 +165,15 @@ Per lap: fix rounds; which check failed; anything the agent tried to change that
 
 Some organisations' GitHub (often GitHub Enterprise) does not allow Actions. Check with `gh api repos/__OWNER__/__PROJECT__/actions/permissions`: `"enabled": false` means no workflow runs. Do not switch Actions on without your organisation's approval. Then the **factory judge** stands in for the workflows:
 
-**When you run laps yourself** ("run a lap"), nothing needs to keep running. When a lap has opened its pull request, it tells you the number; then, in a clone of the project (your main checkout will do):
+**When you run laps yourself** ("run a lap"), you type nothing extra. After the lap opens its pull request, it runs the judge on it (lap step A10):
 
 ```bash
-python harness/judge/judge.py --once --pr 12
+python harness/judge/judge.py --once --pr 12 --port 8180
 ```
 
-It judges that pull request: both guards, then the gates on the pull request merged with `main`. It posts the three results and prints them in one line: `#12: gates success, protected-paths success, scope-guard success. Ready for your review and merge.` It exits 0 only when all three are green. When `gates` is red, say `lap <ticket> fix round` in the lap's session: the lap reads the failing lines from the judge's comment on the pull request. After the fix is pushed, run the same command again. After a merge, `python harness/judge/judge.py --once` also judges the new `main`.
+The judge checks both guards, then runs the gates on the pull request merged with `main`. It posts the three results on the pull request and prints them in one line. A red `gates` is a fix round the lap does at once, then it runs the judge again, at most 3 rounds in all. So the lap ends in one of two ways: a pull request with three green checks, ready for your review and merge, or a stop that says what it needs from you (a label, a decision, or a judge that could not run). You can run the same command yourself at any time to judge a pull request again. After a merge, `python harness/judge/judge.py --once` judges the new `main`.
+
+The lap's agent cannot change what the judge checks: `harness/` is fenced, and the judge takes it from `main`. Posting a status by hand (`gh api …/statuses/…`) is fenced too. The fence is a guard rail, not a lock, so branch protection and your review stay the last word.
 
 **When the dispatcher runs laps,** keep the judge running instead, in its own clone, so every pull request is judged without you:
 

@@ -141,7 +141,7 @@ Give the person a short report:
 2. A table of steps 1–7: done, failed or open, one line each, with evidence (commit ids, workflow run links).
 3. What is left for them, with exact instructions:
    - Branch protection, if step 7 is open.
-   - Without Actions: after each lap's pull request, run the factory judge on it (`python harness/judge/judge.py --once --pr <number>`), and require the three checks once it has posted them (`RUNBOOK.md`, "Without GitHub Actions"). Do not run it yourself during setup.
+   - Without Actions: each lap runs the factory judge on its own pull request (lap step A10); require the three checks once the first lap has posted them (`RUNBOOK.md`, "Without GitHub Actions"). The judge needs Java 21 and Node 22 on the machine where laps run.
    - Plan the product with BMAD, fill in `MISSION.md` themselves, then say "run a lap".
 4. Anything that surprised you, or that this file or the kit's other documents got wrong, so the kit can be fixed.
 

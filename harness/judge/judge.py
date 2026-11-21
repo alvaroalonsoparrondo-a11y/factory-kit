@@ -103,6 +103,15 @@ class GitHub:
         self._send("PATCH", f"/issues/comments/{comment_id}", {"body": body})
 
 
+def ignore_folder(folder):
+    """`.factory/` is ignored by Git through its own `.gitignore`, so a lap's tree stays clean."""
+    top = Path(folder).parent
+    top.mkdir(parents=True, exist_ok=True)
+    ignore = top / ".gitignore"
+    if not ignore.exists():
+        ignore.write_text("*\n", encoding="utf-8")
+
+
 class Conflict(Exception):
     """The pull request does not merge cleanly into `main`."""
 
@@ -130,6 +139,7 @@ class Workspace:
     def prepare(self, main, head=None):
         """A worktree of `main`, merged with `head` when given, with `harness/` from `main`."""
         path = self.folder / "work" / (head or main)[:12]
+        ignore_folder(self.folder)
         self.cleanup(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         self.git("worktree", "add", "--quiet", "--detach", str(path), main)
@@ -208,9 +218,7 @@ class Verdicts:
                 del self.data[old]
         if self.path:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            ignore = self.path.parent.parent / ".gitignore"
-            if not ignore.exists():
-                ignore.write_text("*\n", encoding="utf-8")
+            ignore_folder(self.path.parent)
             self.path.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
 
 

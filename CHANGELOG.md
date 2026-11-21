@@ -2,6 +2,19 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-21 — The lap runs the judge, and hands over a judged pull request
+
+Seen in review of the entry below: a lap run by hand ended with a command for the person to type. The factory's job is a pull request that is ready to merge, so the person had become the CI again.
+
+- **`lap` skill (both copies), new step A10:** without Actions, the lap runs `harness/judge/judge.py --once --pr <n>` on its own pull request. A red `gates` is a fix round, followed by the judge again, within the 3 fix rounds. A red guard stops for the human's label. A conflict goes to section D. A judge that cannot run stops with `waiting manual-step` and is not a round. A green result is handed over as ready to merge. Section B runs the judge again after each fix. A dispatched lap skips the step, since it has no token.
+- **Fence (`fence/claude-settings.json`, `fence/kiro-factory.json`):** an agent may not post a commit status itself (`gh api …statuses…`). The judge posts from its own process, which the fence does not cover.
+- **`harness/judge/judge.py`:** writes `.factory/.gitignore` before its first worktree, so a lap's tree stays clean while the judge runs in it.
+- **`RUNBOOK.md`:** the on-demand way is now the lap's own last step.
+
+Why the lap may run its own judge: it cannot change what the judge checks (`harness/` is fenced and taken from `main`), and posting a status by hand is fenced. A faked status was possible before this change too; branch protection and the human's review remain the last word.
+
+Tested: 38 tests in `harness/judge`, including a clean `git status` after a real gate run. Not tested yet: a real lap through step A10.
+
 ## 2026-11-21 — The judge on demand, for laps run by hand
 
 Seen while planning the judge for `my-factory-demo`: the person runs laps by saying "run a lap", not with the dispatcher, so a judge that has to keep running did not fit.
