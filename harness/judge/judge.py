@@ -54,8 +54,10 @@ sys.path.insert(0, str(HERE.parent / "board"))
 import guards  # noqa: E402
 import board  # noqa: E402  (the paged GitHub reader)
 import serve  # noqa: E402  (origin, host, API root, token, certificate fallback)
+import lap_round  # noqa: E402  (the round budget every lap shares: harness/rounds.json)
 
 USER_AGENT = "factory-judge"
+GRANT_LABEL = "human-granted-round"  # each time a human adds it, the pull request gets one more round
 GATES = "gates"
 MARKER = "<!-- factory-judge:gates -->"
 DEFAULT_PORT = 8190  # 8080 is the human's app, 8081 a hand-started lap, 8090+ dispatched laps
@@ -288,6 +290,8 @@ class Judge:
             v = self.verdicts.get(sha) or {}
             if v.get("conflict_with") == main:
                 continue  # waits for a "main moved" round or for main to move
+            if self._budget_spent(pr, currents[sha]):
+                continue
             todo.append(pr)
         if todo:
             return self.run_gates(todo[0], main, currents[todo[0]["head"]["sha"]])
@@ -297,6 +301,30 @@ class Judge:
         if not self._enforce(main, main_current, "main "):
             return self.run_gates(None, main, main_current)
         return None
+
+    def red_runs(self, number):
+        """This pull request's red gate runs, each commit once. A timeout is not counted: it may be the machine."""
+        return sum(1 for v in self.verdicts.data.values()
+                   if v.get("pull") == number and v.get("state") == "failure" and not v.get("timeout"))
+
+    def grants(self, number):
+        """How many times a human added the grant label to this pull request."""
+        return sum(1 for e in self.gh.get(f"/issues/{number}/events")
+                   if e.get("event") == "labeled" and (e.get("label") or {}).get("name") == GRANT_LABEL)
+
+    def _budget_spent(self, pr, current):
+        """The brake outside the agent: once a pull request's red gate runs reach the lap's round budget, a new
+        commit is not judged until a human grants a round. Reported as a red `gates`, never as green."""
+        reds = self.red_runs(pr["number"])
+        if reds < lap_round.BUDGET:
+            return False
+        allowed = lap_round.BUDGET + self.grants(pr["number"])
+        if reds < allowed:
+            return False
+        text = (f"Round budget spent: {reds} red gate runs of {allowed} (factory judge). "
+                f"A human adds the label {GRANT_LABEL} for one more.")
+        self._post(pr["head"]["sha"], GATES, "failure", guards.description(False, [], text), current, f"#{pr['number']} ")
+        return True
 
     def run_gates(self, pr, main, current=None):
         label = f"#{pr['number']} " if pr else "main "
@@ -330,7 +358,7 @@ class Judge:
         else:
             state, text = "failure", f"Failed on the {where} (factory judge); see its comment."
         self.verdicts.put(sha, {"state": state, "description": text, "main": main, "log": str(log),
-                                "pull": pr["number"] if pr else None})
+                                "pull": pr["number"] if pr else None, "timeout": code is None})
         self._post(sha, GATES, state, text, current, label)
         if pr:
             self.comment(pr["number"], sha, main, state, log)

@@ -92,6 +92,8 @@ class FakeGitHub:
             if number in self.broken:
                 raise RuntimeError("HTTP 502")
             return self.files[number]
+        if path.startswith("/issues/") and path.endswith("/events"):
+            return getattr(self, "events", {}).get(int(path.split("/")[2]), [])
         if path.startswith("/issues/"):
             return self._comments().get(int(path.split("/")[2]), [])
         if path.startswith("/commits/"):
@@ -340,6 +342,59 @@ class GatesTests(unittest.TestCase):
         gh, ws, jd, _ = self.setup([pr(3, "a" * 40), pr(5, "b" * 40)])
         jd.drain()
         self.assertEqual(ws.runs, ["a" * 40, "b" * 40, MAIN])
+
+    def red_commits(self, gh, ws, jd, pulls, n):
+        """Push n red commits to pull request #1, judging each."""
+        for i in range(n):
+            sha = f"{i:x}" * 40
+            pulls[0] = pr(1, sha[:40])
+            ws._head[1] = sha[:40]
+            ws.codes[sha[:40]] = 1
+            jd.run_pass()
+
+    def test_the_round_budget_stops_judging_new_commits(self):
+        pulls = [pr(1, "a" * 40)]
+        gh, ws, jd, _ = self.setup(pulls)
+        self.red_commits(gh, ws, jd, pulls, 3)
+        self.assertEqual(len(ws.runs), 3)
+        pulls[0] = pr(1, "e" * 40)
+        ws._head[1] = "e" * 40
+        jd.run_pass()
+        self.assertEqual(len(ws.runs), 3 + 1)  # main, not the fourth commit
+        self.assertNotIn("e" * 40, ws.runs)
+        status = gh.statuses["e" * 40]["gates"]
+        self.assertEqual(status["state"], "failure")
+        self.assertIn("Round budget spent: 3 red gate runs of 3", status["description"])
+        self.assertLessEqual(len(status["description"]), 140)
+
+    def test_a_human_label_grants_one_more_round(self):
+        pulls = [pr(1, "a" * 40)]
+        gh, ws, jd, _ = self.setup(pulls)
+        self.red_commits(gh, ws, jd, pulls, 3)
+        gh.events = {1: [{"event": "labeled", "label": {"name": j.GRANT_LABEL}}]}
+        pulls[0] = pr(1, "e" * 40)
+        ws._head[1] = "e" * 40
+        jd.run_pass()
+        self.assertIn("e" * 40, ws.runs)
+        self.assertEqual(gh.statuses["e" * 40]["gates"]["state"], "success")
+
+    def test_a_timeout_does_not_spend_the_budget(self):
+        pulls = [pr(1, "a" * 40)]
+        gh, ws, jd, _ = self.setup(pulls)
+        for i in range(3):
+            sha = f"{i:x}" * 40
+            pulls[0] = pr(1, sha)
+            ws._head[1] = sha
+            ws.codes[sha] = None
+            jd.run_pass()
+        self.assertEqual(jd.red_runs(1), 0)
+
+    def test_other_pull_requests_have_their_own_budget(self):
+        pulls = [pr(1, "a" * 40), pr(2, "b" * 40)]
+        gh, ws, jd, _ = self.setup(pulls, codes={"b" * 40: 1})
+        jd.only = 1
+        self.red_commits(gh, ws, jd, pulls, 3)
+        self.assertEqual((jd.red_runs(1), jd.red_runs(2)), (3, 0))
 
     def test_verdicts_survive_a_restart(self):
         folder = Path(tempfile.mkdtemp()) / ".factory" / "judge"

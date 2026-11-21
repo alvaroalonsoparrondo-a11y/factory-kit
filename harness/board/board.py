@@ -25,6 +25,9 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lap_round  # noqa: E402  (the lap's round budget, read from its signals)
+
 CHECKS = ("gates", "protected-paths", "scope-guard")
 GUARDS = ("protected-paths", "scope-guard")
 PLAN_STATUSES = ("draft", "ready-for-dev", "in-progress", "in-review", "built", "done", "blocked", "dropped")
@@ -400,6 +403,10 @@ def derive(snapshot):
     first_ready = set()  # the first startable ticket of each epic
     for r in rows:
         r["stops"] = _stops(signals.get(r["ref"], []), now)
+        events = signals.get(r["ref"], [])
+        r["rounds"] = lap_round.summary(events) if any(e.get("state") in ("round", "grant") for e in events) else None
+        if r["rounds"] and r["reviews"]:  # the lap's own count, when this machine has it; else the commits CI judged
+            r["reviews"]["fix_rounds"] = max(r["reviews"]["fix_rounds"], r["rounds"]["used"])
         r["human_wait"] = ({"stops": len(r["stops"]), "seconds": sum(s["seconds"] for s in r["stops"])}
                            if r["stops"] else None)
         r["waiting_for_you"] = _open_wait(r, snapshot)
@@ -579,7 +586,8 @@ def render_markdown(board):
     out += ["", "---", "",
             "Checks, in order: `gates`, `protected-paths`, `scope-guard` "
             f"({MARK['green']} green, {MARK['red']} red, {MARK['running']} running, {MARK['missing']} not reported). "
-            "Reviews: BMAD review passes / fix rounds / human reviews, then the findings in the plan's triage log. "
+            "Reviews: BMAD review passes / rounds (every fix that was checked again, against the lap's budget in "
+            "`harness/rounds.json`) / human reviews, then the findings in the plan's triage log. "
             "Built by the `board` workflow; do not edit by hand.", ""]
     return "\n".join(out)
 

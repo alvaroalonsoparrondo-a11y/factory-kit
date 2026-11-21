@@ -108,6 +108,7 @@ Commit ("Install BMAD v7") and push. Include the skill folders you installed int
 ```bash
 gh label create human-judge-change --repo HOST/OWNER/PROJECT
 gh label create human-approved-irreversible --repo HOST/OWNER/PROJECT
+gh label create human-granted-round --repo HOST/OWNER/PROJECT
 ```
 
 Kit remote, for carrying factory changes later (see `MODIFYING.md`):

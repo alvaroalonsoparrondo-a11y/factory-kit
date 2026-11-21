@@ -33,3 +33,7 @@ Until the walking skeleton exists there is nothing to judge and the script passe
 ## Calibration
 
 `harness/mutations/` holds deliberate defects as patch files (`*.patch`, made with `git diff`). `harness/calibrate.sh` applies each one to a clean tree and expects the gates to go red. A defect that stays green has ESCAPED: a human adds the missing check. Add one patch for each kind of bug you want to be sure the gates catch.
+
+## The round budget
+
+`harness/rounds.json` holds the one budget every lap shares across all its checks: 3 rounds, a round being a fix that is checked again. `harness/board/lap_round.py` records and enforces it; the lap skill, `bmad-build`'s review loopbacks and the dispatcher all draw on it. See `RUNBOOK.md`, "The round budget".
