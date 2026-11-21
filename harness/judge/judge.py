@@ -52,12 +52,15 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "board"))
 import guards  # noqa: E402
+import classify  # noqa: E402  (why a red gate is red: the change, main, or the machine)
 import board  # noqa: E402  (the paged GitHub reader)
 import serve  # noqa: E402  (origin, host, API root, token, certificate fallback)
 import lap_round  # noqa: E402  (the round budget every lap shares: harness/rounds.json)
 
 USER_AGENT = "factory-judge"
-GRANT_LABEL = "human-granted-round"  # each time a human adds it, the pull request gets one more round
+GRANT_LABEL = "human-granted-round"
+NOT_THIS_CHANGE = "Not this change:"  # how a red `gates` the change did not cause begins; the dispatcher reads it
+ENV_TRIES = 2  # the same commit failing on the machine this often stops for a human instead of running again  # each time a human adds it, the pull request gets one more round
 GATES = "gates"
 MARKER = "<!-- factory-judge:gates -->"
 DEFAULT_PORT = 8190  # 8080 is the human's app, 8081 a hand-started lap, 8090+ dispatched laps
@@ -224,6 +227,11 @@ class Verdicts:
             self.path.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
 
 
+def fit(text, limit=140):
+    """A commit status description (GitHub allows 140 characters)."""
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
 def tail(path, lines=LOG_TAIL_LINES, limit=60000):
     try:
         text = Path(path).read_text(encoding="utf-8", errors="replace")
@@ -234,8 +242,9 @@ def tail(path, lines=LOG_TAIL_LINES, limit=60000):
 
 class Judge:
     def __init__(self, gh, ws=None, verdicts=None, dry_run=False, out=print, port=DEFAULT_PORT,
-                 timeout=DEFAULT_TIMEOUT_MINUTES * 60, only=None):
+                 timeout=DEFAULT_TIMEOUT_MINUTES * 60, only=None, retry_errors=False):
         self.gh, self.ws, self.dry_run, self.out, self.only = gh, ws, dry_run, out, only
+        self.retry_errors = retry_errors
         self.last_ran, self.results = None, {}
         self.verdicts = verdicts if verdicts is not None else Verdicts()
         self.port, self.timeout = port, timeout
@@ -274,6 +283,9 @@ class Judge:
     def _enforce(self, sha, current, label):
         """Keep the posted `gates` status equal to the judge's verdict. False when there is none yet."""
         v = self.verdicts.get(sha)
+        if v and v.get("state") == "error" and self.retry_errors:  # the human fixed the machine: judge it again
+            self.verdicts.data.pop(sha, None)
+            return False
         if not v or "state" not in v:
             return False
         self._post(sha, GATES, v["state"], v["description"], current, label)
@@ -305,7 +317,8 @@ class Judge:
     def red_runs(self, number):
         """This pull request's red gate runs, each commit once. A timeout is not counted: it may be the machine."""
         return sum(1 for v in self.verdicts.data.values()
-                   if v.get("pull") == number and v.get("state") == "failure" and not v.get("timeout"))
+                   if v.get("pull") == number and v.get("state") == "failure" and not v.get("timeout")
+                   and v.get("cause", "introduced") == "introduced")
 
     def grants(self, number):
         """How many times a human added the grant label to this pull request."""
@@ -351,20 +364,53 @@ class Judge:
         finally:
             self.ws.cleanup(path)
         minutes = max(1, round(seconds / 60))
+        number = pr["number"] if pr else None
+        cause, evidence = None, ""
         if code == 0:
             state, text = "success", f"Passed on the {where} in {minutes} min (factory judge)."
-        elif code is None:
-            state, text = "failure", f"Stopped after {self.timeout // 60} min on the {where} (factory judge)."
         else:
-            state, text = "failure", f"Failed on the {where} (factory judge); see its comment."
+            log_text = Path(log).read_text(encoding="utf-8", errors="replace") if Path(log).exists() else ""
+            if code is None:
+                log_text += "\n" + classify.TIMEOUT
+            cause, evidence = classify.classify(log_text)
+            if cause == "introduced" and pr:
+                cause, evidence = classify.classify(log_text, self._main_red(main))
+            if cause == "environment":
+                tries = (self.verdicts.get(sha) or {}).get("env_failures", 0) + 1
+                if tries < ENV_TRIES:
+                    self.verdicts.put(sha, {"env_failures": tries, "pull": number, "evidence": evidence})
+                    self._post(sha, GATES, "pending", fit(f"Machine failure ({evidence}); running again next pass "
+                                                          "(factory judge)."), current, label)
+                    self.out(f"{label}{sha[:7]} machine failure, will run again: {evidence}")
+                    return (number or "main", "environment")
+                state, text = "error", fit(f"{NOT_THIS_CHANGE} the machine failed twice ({evidence}). Fix it, then "
+                                           "judge again with --retry-errors (factory judge).")
+            elif cause == "inherited":
+                state, text = "failure", fit(f"{NOT_THIS_CHANGE} the gates are red on main {main[:7]} alone, too; "
+                                             "main needs a fix first (factory judge).")
+            elif cause == "timeout":
+                state, text = "failure", f"Stopped after {self.timeout // 60} min on the {where} (factory judge)."
+            else:
+                state, text = "failure", f"Failed on the {where} (factory judge); see its comment."
         self.verdicts.put(sha, {"state": state, "description": text, "main": main, "log": str(log),
-                                "pull": pr["number"] if pr else None, "timeout": code is None})
+                                "pull": number, "timeout": code is None, "cause": cause or "", "evidence": evidence})
         self._post(sha, GATES, state, text, current, label)
         if pr:
-            self.comment(pr["number"], sha, main, state, log)
-        return (pr["number"] if pr else "main", state)
+            self.comment(pr["number"], sha, main, state, log, cause, evidence)
+        return (number or "main", state)
 
-    def comment(self, number, sha, main, state, log):
+    def _main_red(self, main):
+        """Whether the gates are red on `main` alone, from its verdict, or by judging `main` now. None: unknown."""
+        v = self.verdicts.get(main)
+        if not v or "state" not in v:
+            self.out(f"main {main[:7]}: judging main alone, to tell whether the red is this change's")
+            self.run_gates(None, main)
+            v = self.verdicts.get(main) or {}
+        if "state" not in v or v.get("cause") in ("environment", "timeout"):
+            return None
+        return v["state"] == "failure"
+
+    def comment(self, number, sha, main, state, log, cause=None, evidence=""):
         """One comment per pull request, edited in place: the failing tail, or that the gates now pass."""
         mine = [c for c in self.gh.get(f"/issues/{number}/comments") if MARKER in (c.get("body") or "")]
         if state == "success":
@@ -373,8 +419,15 @@ class Judge:
             body = (f"{MARKER}\n<!-- sha:{sha} -->\n**gates** passed on `{sha[:7]}` merged with main "
                     f"`{main[:7]}` (factory judge).")
         else:
+            meaning = {
+                "introduced": "the change caused it. Fixing it takes a round (`ci`).",
+                "inherited": "not this change: the gates are red on `main` alone, too. No round: `main` needs a fix first.",
+                "environment": "not this change: the machine failed. No round: fix the machine, then judge again.",
+                "timeout": "the gates did not finish in time. No round on its own: look at the log for a hang.",
+            }.get(cause or "introduced")
             body = (f"{MARKER}\n<!-- sha:{sha} -->\n**gates** failed on `{sha[:7]}` merged with main `{main[:7]}` "
-                    f"(factory judge). Last lines of the log:\n\n```\n{tail(log)}\n```")
+                    f"(factory judge).\n\nCause: **{cause or 'introduced'}**, {meaning} Evidence: {evidence or 'none'}."
+                    f"\n\nLast lines of the log:\n\n```\n{tail(log)}\n```")
         if mine:
             self.gh.edit_comment(mine[-1]["id"], body)
         else:
@@ -448,6 +501,8 @@ def main(argv=None):
     p.add_argument("--dry-run", action="store_true", help="print what would be posted or run; do neither")
     p.add_argument("--no-gates", action="store_true", help="the two guards only (a machine without Java or Node)")
     p.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"the gate's app port (default {DEFAULT_PORT})")
+    p.add_argument("--retry-errors", action="store_true",
+                   help="judge again the commits whose gates stopped on a machine failure (after you fixed it)")
     p.add_argument("--gates-timeout", type=int, default=DEFAULT_TIMEOUT_MINUTES, help="minutes (default 30)")
     a = p.parse_args(argv)
     root = Path(a.root).resolve()
@@ -456,7 +511,7 @@ def main(argv=None):
     folder = root / ".factory" / "judge"
     judge = Judge(GitHub(repo, server, token), ws=None if a.no_gates else Workspace(root, folder),
                   verdicts=Verdicts(folder / "verdicts.json"), dry_run=a.dry_run, port=a.port,
-                  timeout=a.gates_timeout * 60, only=a.pr)
+                  timeout=a.gates_timeout * 60, only=a.pr, retry_errors=a.retry_errors)
     print(f"judging {repo} on {server}{' (dry run)' if a.dry_run else ''}{' (guards only)' if a.no_gates else ''}")
     if a.once:
         try:

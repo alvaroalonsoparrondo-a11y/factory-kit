@@ -50,6 +50,9 @@ import lap_round  # noqa: E402  (the lap's round budget, shared by every check: 
 # A clean merge of main is not a round (it says nothing about the ticket), but a lap that falls behind
 # again and again is spending without progress: after this many, it stops for the human.
 MAX_MOVED_ROUNDS = 3
+# The factory judge begins a red `gates` the change did not cause with this (a machine failure, or main red
+# alone too): no fix round for it, it goes to the human. See harness/judge/classify.py.
+NOT_THIS_CHANGE = "Not this change:"
 JUDGE_MARKER = "<!-- factory-judge:gates -->"  # the factory judge's failing-gates comment (harness/judge/judge.py)
 DEFAULT_CAP = 2
 BASE_PORT = 8090  # 8080 is the human's app, 8081 a hand-started worktree lap
@@ -737,6 +740,10 @@ class Dispatcher:
             rep["needs_you"].append((ref, r["needs_you"]))
             return busy
         fix = [c for c in red if c in FIXABLE]
+        not_ours = self._not_this_change(r, fix)
+        if not_ours:
+            rep["needs_you"].append((ref, not_ours))
+            return busy
         if fix:
             if run.get("handled_sha") == head and run["stage"] == "fix":
                 return halt(f"fix round {run['fix_rounds']} pushed nothing new; read {run.get('log')}.")
@@ -804,6 +811,10 @@ class Dispatcher:
         checks = r["checks"] or {}
         red = [c for c in board.CHECKS if checks.get(c) == "red"]
         fix = [c for c in red if c in FIXABLE]
+        not_ours = self._not_this_change(r, fix)
+        if not_ours and not any(c in board.GUARDS for c in red):
+            rep["needs_you"].append((ref, not_ours))
+            return
         if fix and not any(c in board.GUARDS for c in red):
             if head != run.get("handled_sha") and not self.dry_run:
                 run["fix_rounds"] += 1
@@ -826,6 +837,15 @@ class Dispatcher:
             rep["needs_you"].append((ref, r["needs_you"]))
         else:
             rep["waiting"].append((ref, r["stage"]))
+
+    @staticmethod
+    def _not_this_change(r, fix):
+        """What the human needs to know when every red fixable check is one the change did not cause, else None."""
+        notes = r.get("check_notes") or {}
+        ours = [c for c in fix if not (notes.get(c) or "").startswith(NOT_THIS_CHANGE)]
+        if not fix or ours:
+            return None
+        return "; ".join(f"{c}: {notes[c]}" for c in fix) + " No fix round: this is for you."
 
     @staticmethod
     def _rounds(run, r, pending=0):

@@ -19,7 +19,7 @@ Hard rules for the whole lap (from `FACTORY_RULES.md`):
 - **One round budget for the whole lap.** A round is a fix that is checked again: a review loopback in `bmad-build`, a red local gate fixed and run again, a failed runtime check, a red check on the pull request, a merge of `main` that needed conflicts resolved. Every source shares one budget, 3 rounds per lap (`harness/rounds.json`). Before every such fix, run `python harness/board/lap_round.py <ticket-id> take <source> "<what the check found>"`, with `<source>` one of `review`, `gates`, `runtime`, `ci`, `main-moved`.
   - Exit 0: make the fix. Fix the whole class of the finding in this round (every place the same cause shows), not the one instance the check named.
   - Any other exit: stop. The script has already signalled the stop; report its output. Never change code for a finding without a round, and never run `lap_round.py … grant`: only a human gives more rounds.
-  - Not a round: the first run of any check, a clean merge of `main`, and a failure of the machine rather than the change (a usage limit, a check that could not start, a lost network, a missing tool). Those take no round: signal `waiting manual-step` and stop.
+  - Not a round: the first run of any check, a clean merge of `main`, a failure of the machine rather than the change (a usage limit, a check that could not start, a lost network, a missing tool), and a red that `main` has alone, too. Those take no round: signal `waiting manual-step` (the machine) or `waiting decision` (`main` is red) and stop. For red gates, `harness/judge/classify.py` says which it is (step A7); do not decide it yourself.
 - **Say when you wait.** Before you stop to wait for the human, for any reason, run `python harness/board/lap_signal.py <ticket-id> waiting <kind> "<what you need>"`. When the human has answered, run `python harness/board/lap_signal.py <ticket-id> working` before you go on. This includes stops inside `bmad-build` (a permission, a choice, approving the plan) and the limits below. The kind is one of `permission`, `choice`, `approval`, `question`, `manual-step`, `limit`, `decision`. The final hand-over in step A9 needs no signal; the pull request shows it. You may run `lap_signal.py`; never change it.
 
 ## A. New lap
@@ -30,10 +30,13 @@ Hard rules for the whole lap (from `FACTORY_RULES.md`):
 4. **Branch.** `git switch -c story/<ticket-id> origin/main`, then `git push -u origin story/<ticket-id>` at once. The board now shows the lap as started.
 5. **Irreversible check.** If the ticket needs anything in `FACTORY_RULES.md` section 1 or a protected path, stop. Do not build a partial version. Make the stop visible on the board: ask the product owner skill (`bmad-agent-po`, BOARD) to mark the ticket blocked with the rule as the reason (`tickets.py mark <ref> draft --blocked "<rule and why>"`), commit, `git push`. Then tell the user which rule applies.
 6. **Build with BMAD.** Invoke the `bmad-build` skill with the ticket. Follow its workflow fully, including its review step. It commits locally. It must not push. One push is yours: when the plan is approved, commit the plan file if `bmad-build` has not, and `git push`, so the board shows the ticket as building. Then let `bmad-build` continue. Each of its review loopbacks takes a round first (source `review`); `_bmad/custom/bmad-build.toml` tells it so, and when `take` refuses, `bmad-build` halts and the lap stops.
-7. **Local gates.** Run `PORT=<port> bash harness/run-gates.sh`.
-   - Green: go on.
-   - Red because of the change: take a round (`take gates "<the failing check and line>"`), fix the cause in application or test code, run again.
-   - Red because of the machine (a download failed, the port is taken, Java or Node is missing): no round. Signal `waiting manual-step` and stop.
+7. **Local gates.** Run `PORT=<port> bash harness/run-gates.sh > .lap/<ticket-id>-gates.log 2>&1`, then read its exit status and the log.
+   - Green (exit 0): go on.
+   - Red: ask why, never guess: `python harness/judge/classify.py .lap/<ticket-id>-gates.log --check-main --port <port + 100>`. It prints one word first:
+     - `introduced`: the change caused it. Take a round (`take gates "<the failing check and line>"`), fix the cause in application or test code, run the gates again.
+     - `environment`: the machine failed (a download, a port in use, a missing tool). No round: signal `waiting manual-step "<its evidence line>"` and stop.
+     - `inherited`: the gates are red on `origin/main` alone, too. No round: signal `waiting decision "main is red: <its evidence>"` and stop.
+     - `timeout`: no round on its own. Look at the log for a hang the change caused; if there is one, it is `introduced`; if not, signal `waiting manual-step` and stop.
 8. **Push.** `git fetch origin`. If `origin/main` has moved since the branch was cut, do section D first. Then `git push`. Nothing else.
 9. **Hand over.** Write the pull request text to `.lap/<ticket-id>-pr.md`. Git ignores `.lap/`; never commit it.
    - First line: the title, `<ticket-id>: <ticket title>`. Then one blank line.
@@ -47,7 +50,8 @@ Hard rules for the whole lap (from `FACTORY_RULES.md`):
 
 10. **Judge (only without GitHub Actions).** Run the factory judge on the pull request: `python harness/judge/judge.py --once --pr <number> --port <port + 100>`. It posts the three checks as commit statuses, from `harness/` on `main`, and prints one line with the results. Never post a status any other way.
     - Exit 0, all three green: tell the user the pull request is ready for their review and merge, with its URL and the judge's line. Stop.
-    - `gates` red: do a fix round (section B) with the judge's comment as the failure: it takes a `ci` round first, and when `take` refuses, the lap stops there. Then run the judge again.
+    - `gates` red, and its description does not start with "Not this change": do a fix round (section B) with the judge's comment as the failure. It takes a `ci` round first, and when `take` refuses, the lap stops there. Then run the judge again.
+    - `gates` red or `error` starting with "Not this change": the judge found the cause outside the change (its comment says `environment` or `inherited`, with the evidence). No round: signal `waiting manual-step` (the machine) or `waiting decision` (`main` is red) with that evidence, and stop.
     - `gates` red with "Round budget spent": the judge will not judge another commit. Stop and signal `waiting limit "round budget spent on the pull request"`; only a human grants a round.
     - `protected-paths` or `scope-guard` red: section B, rule 2. If the change is needed, stop and signal `waiting decision "<check>: <the paths>"`; the label is the human's call.
     - No `gates` result, because the branch conflicts with `main`: do section D, then run the judge again.
@@ -59,7 +63,7 @@ Hard rules for the whole lap (from `FACTORY_RULES.md`):
 
 1. Make sure you are on the lap's branch.
 2. Read the failure. Without GitHub Actions, a red `gates` from the factory judge has its last log lines in the judge's comment on the pull request (it starts with `<!-- factory-judge:gates -->`); when the user only says the check is red, read that comment with `gh api repos/<owner>/<repo>/issues/<number>/comments`.
-   - `gates`: reproduce with `PORT=<port> bash harness/run-gates.sh`, fix, run again until green.
+   - `gates`: if the failure says "Not this change" (the judge's cause is `environment` or `inherited`), take no round: signal as in step A10 and stop. Otherwise reproduce as in step A7, which also asks `classify.py` why; fix and run again until green.
    - `protected-paths` or `scope-guard`: you changed something you may not change. Revert that part. If the ticket cannot be done without it, stop and say so.
 3. Commit and `git push`. Tell the user in one line what you changed. Without GitHub Actions, then run the judge again (step A10).
 4. Every fix here takes a round first: source `ci` (step 2, `gates`). A guard needs no round: reverting a change you may not make is not a fix that is checked again. When `take` refuses, stop and recommend that the product owner split or rewrite the ticket, with the findings it printed.
