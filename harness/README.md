@@ -37,3 +37,5 @@ Until the walking skeleton exists there is nothing to judge and the script passe
 ## The round budget
 
 `harness/rounds.json` holds the one budget every lap shares across all its checks: 3 rounds, a round being a fix that is checked again. `harness/board/lap_round.py` records and enforces it; the lap skill, `bmad-build`'s review loopbacks and the dispatcher all draw on it. See `RUNBOOK.md`, "The round budget".
+
+`harness/judge/classify.py` says why red gates are red: `introduced` (a round), `environment` or `inherited` (no round), or `timeout`. The lap's local gates and the factory judge both ask it, so the agent never decides it. Its machine-failure patterns are kept narrow on purpose.

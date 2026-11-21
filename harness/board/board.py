@@ -388,6 +388,7 @@ def derive(snapshot):
             if plan and (status == "blocked" or plan["blocked_at"]) else None,
             "pr": {"number": pr["number"], "url": pr["url"]} if pr else None,
             "checks": {c: (pr["checks"].get(c) or {}).get("state", "missing") for c in CHECKS} if pr else None,
+            "check_notes": {c: (pr["checks"].get(c) or {}).get("description", "") for c in CHECKS} if pr else None,
             "reviews": {
                 "bmad": passes or (loops + 1 if reviewed else 0),
                 "findings": plan.get("findings") if plan else None,

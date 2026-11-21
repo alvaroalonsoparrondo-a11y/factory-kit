@@ -419,6 +419,17 @@ class Routing(unittest.TestCase):
         self.assertEqual(w.run("1.1")["moved_rounds"], 3)
         self.assertIn("still behind main after 3 main-moved rounds", dict(rep["needs_you"])["1.1"])
 
+    def test_a_red_the_change_did_not_cause_starts_no_fix_round(self):
+        w = self.started_lap()
+        self.pushed(w, checks={**GREEN, "gates": "red"})
+        for pull in w.snapshot["pulls"]:
+            pull["checks"]["gates"]["description"] = "Not this change: the machine failed twice (network: ETIMEDOUT)."
+        rep = w.tick()
+        self.assertIn("No fix round", dict(rep["needs_you"])["1.1"])
+        self.assertIn("the machine failed twice", dict(rep["needs_you"])["1.1"])
+        self.assertEqual(len(w.runner.started), 1)
+        self.assertEqual(w.run("1.1")["fix_rounds"], 0)
+
     def test_behind_main_starts_a_main_moved_round(self):
         w = self.started_lap()
         self.pushed(w, checks=GREEN)

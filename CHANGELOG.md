@@ -2,6 +2,36 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-21 — Why the gates are red: the change, main, or the machine
+
+Seen in planning topic 2, and in Archon's incident log (2026-10-25): an attempt cap that counted a broken toolchain against the work parked good tickets as `needs-owner`. The round budget had the same gap. Every red gate looked like the change's fault, so a lost network or a red `main` spent a lap's rounds, and the dispatcher started fix rounds that could not succeed.
+
+- **`harness/judge/classify.py` (new, with tests):** after `archon-validate`'s classify step. It says why red gates are red:
+  - `environment`: a known machine failure is in the log (network, port in use, missing tool, full disk, browser install);
+  - `inherited`: with `--check-main`, the gates run on `origin/main` alone and are red there too;
+  - `timeout`;
+  - otherwise `introduced`, the conservative default.
+
+  A machine failure needs positive evidence, and the patterns are kept narrow. `ECONNREFUSED` is left out on purpose: the app under test may have crashed.
+- **`harness/judge/judge.py`:** classifies every red `gates`.
+  - An `inherited` red is posted red, beginning "Not this change:". To decide, the judge judges `main` alone once and reuses that verdict.
+  - A machine failure runs again on the next pass. The same commit failing on the machine twice is posted `error`, "Not this change: the machine failed twice", and is not run again until `--retry-errors`. That is Archon's "the same fault twice stops, it does not keep spending".
+  - Neither counts against the round budget. The judge's comment states the cause and its evidence.
+- **Board and dispatcher:** the board keeps each check's description. The dispatcher starts no fix round for a red that begins "Not this change:"; it goes to the human.
+- **`lap` skill (both copies):**
+  - step A7 saves the gates log and asks `classify.py --check-main` before taking a round;
+  - steps A10 and B take no round for "Not this change";
+  - the budget rule says the agent never decides the cause itself.
+
+Tested: 49 judge tests, 7 of them new:
+- machine-failure lines classified as `environment`, and lines the change can cause classified as `introduced`;
+- a machine failure runs again, then stops;
+- `--retry-errors` judges again;
+- an `inherited` red takes no round;
+- an `introduced` red takes one, and `main`'s verdict is reused.
+
+One new dispatcher test: no fix round for "Not this change". One real `classify.py --check-main` run on this kit. Not tested yet: a real project's logs (network failures in Maven or npm as they really print). Still open: runtime verification, part 2 of topic 2.
+
 ## 2026-11-21 — One round budget per lap, for every check
 
 Seen in planning: each loop had its own limit of 3, and `bmad-build`'s review loopback had BMAD's own 5. Together a lap could spend 3 review loopbacks, 3 local gate fixes, 3 CI fixes and any number of "main moved" rounds, and runtime verification would add another loop. Separate limits add up; the cost the person wanted bounded did not have a bound.

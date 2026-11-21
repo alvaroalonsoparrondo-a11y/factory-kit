@@ -11,6 +11,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
+import classify
 import guards
 import judge as j
 
@@ -183,6 +184,32 @@ class JudgeTests(unittest.TestCase):
         self.assertTrue(any("#1: not judged" in line for line in lines))
 
 
+class ClassifyTests(unittest.TestCase):
+    def test_machine_failures_need_evidence(self):
+        for line, kind in (("npm ERR! code ETIMEDOUT", "network"),
+                           ("[ERROR] Could not transfer artifact org.x:y:pom:1 from/to central (https://repo)", "network"),
+                           ("java.net.UnknownHostException: repo.maven.apache.org", "network"),
+                           ("Web server failed to start. Port 8190 was already in use.", "port"),
+                           ("bash: mvn: command not found", "tool"),
+                           ("write error: No space left on device", "disk"),
+                           ("Failed to download Chromium 120", "browser")):
+            cause, evidence = classify.classify(f"== Gate 1\n{line}\nmore\n")
+            self.assertEqual(cause, "environment", line)
+            self.assertTrue(evidence.startswith(kind), evidence)
+
+    def test_failures_the_change_can_cause_are_introduced(self):
+        for line in ("[ERROR] Tests run: 12, Failures: 1", "error TS2339: Property 'x' does not exist",
+                     "connect ECONNREFUSED 127.0.0.1:8190", "GATE FAIL: build identity mismatch",
+                     "GATE FAIL: application did not become healthy", "1 failed: shortlink.spec.ts"):
+            self.assertEqual(classify.classify(line)[0], "introduced", line)
+
+    def test_main_and_timeout(self):
+        self.assertEqual(classify.classify("Failures: 1", main_red=True)[0], "inherited")
+        self.assertEqual(classify.classify("Failures: 1", main_red=False)[0], "introduced")
+        self.assertEqual(classify.classify("x\n" + classify.TIMEOUT + " in 30 minutes.")[0], "timeout")
+        self.assertEqual(classify.classify("bash: npm: command not found", main_red=True)[0], "environment")
+
+
 MAIN = "f" * 40
 
 
@@ -209,7 +236,7 @@ class FakeWorkspace:
         sha = candidate.split("-judge-")[0]
         self.runs.append(sha)
         log.parent.mkdir(parents=True, exist_ok=True)
-        log.write_text(f"output of {sha[:7]}\nGATE FAIL: something\n")
+        log.write_text(getattr(self, "logs", {}).get(sha, f"output of {sha[:7]}\nGATE FAIL: something\n"))
         return self.codes.get(sha, 0), 125
 
     def cleanup(self, path):
@@ -356,12 +383,12 @@ class GatesTests(unittest.TestCase):
         pulls = [pr(1, "a" * 40)]
         gh, ws, jd, _ = self.setup(pulls)
         self.red_commits(gh, ws, jd, pulls, 3)
-        self.assertEqual(len(ws.runs), 3)
+        self.assertEqual([r for r in ws.runs if r != MAIN], [f"{i:x}" * 40 for i in range(3)])
+        self.assertEqual(ws.runs.count(MAIN), 1)  # judged once, to tell whether the red was inherited
         pulls[0] = pr(1, "e" * 40)
         ws._head[1] = "e" * 40
         jd.run_pass()
-        self.assertEqual(len(ws.runs), 3 + 1)  # main, not the fourth commit
-        self.assertNotIn("e" * 40, ws.runs)
+        self.assertNotIn("e" * 40, ws.runs)  # the fourth commit is not judged
         status = gh.statuses["e" * 40]["gates"]
         self.assertEqual(status["state"], "failure")
         self.assertIn("Round budget spent: 3 red gate runs of 3", status["description"])
@@ -395,6 +422,60 @@ class GatesTests(unittest.TestCase):
         jd.only = 1
         self.red_commits(gh, ws, jd, pulls, 3)
         self.assertEqual((jd.red_runs(1), jd.red_runs(2)), (3, 0))
+
+    def test_a_machine_failure_runs_again_then_stops_without_a_round(self):
+        gh, ws, jd, lines = self.setup([pr(1, "a" * 40)], codes={"a" * 40: 1})
+        ws.logs = {"a" * 40: "npm ERR! code ECONNRESET\nnpm ERR! network request failed\n"}
+        jd.run_pass()
+        self.assertEqual(self.gates(gh, "a" * 40), ["pending", "pending"])  # running, then: will run again
+        self.assertIn("Machine failure (network", gh.statuses["a" * 40]["gates"]["description"])
+        jd.run_pass()
+        self.assertEqual(ws.runs.count("a" * 40), 2)
+        status = gh.statuses["a" * 40]["gates"]
+        self.assertEqual(status["state"], "error")
+        self.assertTrue(status["description"].startswith(j.NOT_THIS_CHANGE))
+        self.assertLessEqual(len(status["description"]), 140)
+        self.assertEqual(jd.red_runs(1), 0)
+        self.assertIn("Cause: **environment**", gh.comments[1][0]["body"])
+        self.assertNotIn(MAIN, ws.runs)  # a machine failure needs no look at main
+        jd.run_pass()
+        self.assertEqual(ws.runs.count("a" * 40), 2)  # stopped: not run a third time
+
+    def test_retry_errors_judges_it_again_once_the_machine_is_fixed(self):
+        gh, ws, jd, _ = self.setup([pr(1, "a" * 40)], codes={"a" * 40: 1})
+        ws.logs = {"a" * 40: "bash: java: command not found\n"}
+        jd.run_pass()
+        jd.run_pass()
+        self.assertEqual(gh.statuses["a" * 40]["gates"]["state"], "error")
+        ws.codes["a" * 40], ws.logs = 0, {}
+        jd.retry_errors = True
+        jd.run_pass()
+        self.assertEqual(gh.statuses["a" * 40]["gates"]["state"], "success")
+
+    def test_red_on_main_too_is_inherited_and_takes_no_round(self):
+        gh, ws, jd, _ = self.setup([pr(1, "a" * 40)], codes={"a" * 40: 1, MAIN: 1})
+        jd.run_pass()
+        self.assertEqual(ws.runs, ["a" * 40, MAIN])  # main judged alone to decide
+        status = gh.statuses["a" * 40]["gates"]
+        self.assertEqual(status["state"], "failure")
+        self.assertIn("red on main fffffff alone", status["description"])
+        self.assertTrue(status["description"].startswith(j.NOT_THIS_CHANGE))
+        self.assertEqual(jd.red_runs(1), 0)
+        self.assertIn("Cause: **inherited**", gh.comments[1][0]["body"])
+        self.assertEqual(gh.statuses[MAIN]["gates"]["state"], "failure")
+
+    def test_red_with_main_green_is_introduced_and_takes_a_round(self):
+        gh, ws, jd, _ = self.setup([pr(1, "a" * 40)], codes={"a" * 40: 1})
+        jd.run_pass()
+        self.assertEqual(jd.red_runs(1), 1)
+        self.assertIn("Cause: **introduced**", gh.comments[1][0]["body"])
+        self.assertIn("takes a round (`ci`)", gh.comments[1][0]["body"])
+        pulls = gh.pulls
+        pulls[0] = pr(1, "c" * 40)
+        ws._head[1] = "c" * 40
+        ws.codes["c" * 40] = 1
+        jd.run_pass()
+        self.assertEqual(ws.runs.count(MAIN), 1)  # main's verdict is reused, not run again
 
     def test_verdicts_survive_a_restart(self):
         folder = Path(tempfile.mkdtemp()) / ".factory" / "judge"
