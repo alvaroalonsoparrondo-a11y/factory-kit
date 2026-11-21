@@ -13,7 +13,9 @@
       "Edit(/.kiro/skills/lap/**)",
       "Edit(/_bmad/custom/**)",
       "Bash(git push --force*)",
-      "Bash(git push -f*)"
+      "Bash(git push -f*)",
+      "Bash(gh api *statuses*)",
+      "Bash(gh api*/statuses/*)"
     ]
   }
 }

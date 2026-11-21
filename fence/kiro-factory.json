@@ -28,7 +28,7 @@
       },
       {
         "capability": "shell",
-        "match": ["git push --force*", "git push -f*"],
+        "match": ["git push --force*", "git push -f*", "gh api*statuses*"],
         "effect": "deny"
       }
     ]

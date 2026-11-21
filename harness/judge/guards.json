@@ -1,0 +1,20 @@
+{
+  "protected-paths": {
+    "about": "The judge and the constitution. Same list as FACTORY_RULES.md section 2, the fence and CODEOWNERS.",
+    "pattern": "^(MISSION\\.md|FACTORY_RULES\\.md|AGENTS\\.md|CLAUDE\\.md|harness/|\\.github/|\\.claude/settings\\.json|\\.claude/skills/lap/|\\.kiro/agents/|\\.kiro/skills/lap/|_bmad/custom/)",
+    "ignore_case": false,
+    "renames": true,
+    "skip_template": true,
+    "label": "human-judge-change",
+    "found": "Protected paths touched"
+  },
+  "scope-guard": {
+    "about": "Paths that look like identity, migration, secret or deployment changes (FACTORY_RULES.md section 1).",
+    "pattern": "(db/migration/|/migrations?/|liquibase|flyway|security|/auth/|oauth|jwt|password|credential|\\.pem$|\\.jks$|\\.p12$|Dockerfile|/deploy/|terraform)",
+    "ignore_case": true,
+    "renames": false,
+    "skip_template": false,
+    "label": "human-approved-irreversible",
+    "found": "Paths that look like identity, migration, secret or deployment changes"
+  }
+}

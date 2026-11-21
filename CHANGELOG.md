@@ -2,6 +2,55 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-21 — The lap runs the judge, and hands over a judged pull request
+
+Seen in review of the entry below: a lap run by hand ended with a command for the person to type. The factory's job is a pull request that is ready to merge, so the person had become the CI again.
+
+- **`lap` skill (both copies), new step A10:** without Actions, the lap runs `harness/judge/judge.py --once --pr <n>` on its own pull request. A red `gates` is a fix round, followed by the judge again, within the 3 fix rounds. A red guard stops for the human's label. A conflict goes to section D. A judge that cannot run stops with `waiting manual-step` and is not a round. A green result is handed over as ready to merge. Section B runs the judge again after each fix. A dispatched lap skips the step, since it has no token.
+- **Fence (`fence/claude-settings.json`, `fence/kiro-factory.json`):** an agent may not post a commit status itself (`gh api …statuses…`). The judge posts from its own process, which the fence does not cover.
+- **`harness/judge/judge.py`:** writes `.factory/.gitignore` before its first worktree, so a lap's tree stays clean while the judge runs in it.
+- **`RUNBOOK.md`:** the on-demand way is now the lap's own last step.
+
+Why the lap may run its own judge: it cannot change what the judge checks (`harness/` is fenced and taken from `main`), and posting a status by hand is fenced. A faked status was possible before this change too; branch protection and the human's review remain the last word.
+
+Tested: 38 tests in `harness/judge`, including a clean `git status` after a real gate run. Not tested yet: a real lap through step A10.
+
+## 2026-11-21 — The judge on demand, for laps run by hand
+
+Seen while planning the judge for `my-factory-demo`: the person runs laps by saying "run a lap", not with the dispatcher, so a judge that has to keep running did not fit.
+
+- **`harness/judge/judge.py`:** `--pr <n>` judges one pull request (both guards and the gates; not `main`). `--once` now judges everything waiting and then exits; before, it ran one gate. `--once --pr <n>` prints the three results in one line and exits 0 only when all three are green.
+- **`lap` skill (both copies):** step A9, without Actions, tells the user the exact judge command for the new pull request. The lap does not run the judge itself, so it never judges its own work. Section B reads a red `gates` from the judge's comment.
+- **`RUNBOOK.md`, "Without GitHub Actions":** leads with the on-demand way for laps run by hand, then the always-on way for the dispatcher.
+
+Tested: 37 tests in `harness/judge` (one pull request only, red is not ready, a pull request that is not open, `--once` judges everything and stops); a dry run against this kit.
+
+## 2026-11-21 — The gates run without GitHub Actions
+
+Seen in `my-factory-demo`, and left open by the entry below: without Actions, `gates` was the person's own run of `run-gates.sh` before each merge. Nothing stopped a merge they had not checked, and a fix round had no failing output to read.
+
+- **`harness/judge/judge.py`** also judges `gates`. It runs `run-gates.sh` on each open pull request merged with `main`, in a worktree of its own clone, and then on `main` itself after each merge.
+  - `harness/` is taken from `main`, so a pull request cannot change the gate that judges it.
+  - The gate runs with no GitHub token in its environment, under a 30-minute limit that kills its whole process tree. The lap-skill copy check from `gates.yml` is included.
+  - One run per pass, oldest pull request first; each commit is judged once. Verdicts are kept in `.factory/judge/verdicts.json`, so a status that disagrees with a verdict is overwritten without running again.
+  - A red gate's log tail goes into one pull request comment, edited in place.
+  - A pull request that conflicts with `main` gets no status; it waits for a "main moved" round.
+  - New flags: `--no-gates`, `--port` (default 8190) and `--gates-timeout`.
+- **`harness/dispatch/dispatch.py`:** with no check run to read, a fix round reads the judge's comment for that commit.
+- **`RUNBOOK.md`, "Without GitHub Actions"** is rewritten around the judge: its own clone, what its machine needs, its token, and requiring all three statuses once it runs. **`AGENT_SETUP.md`** and **`harness/README.md`** point to it.
+
+Tested: 33 tests in `harness/judge`. Six of them run real Git against a local origin: the merge, the harness restored from `main`, no token reaching the gate, the lap-skill check, a conflict, and the timeout kill. Two dispatcher tests cover reading the comment. The board and dispatcher suites still pass, and one real gate run on this kit's `main` passed (no backend: notice only). Not tested yet: a real Spring and Angular project's gates through the judge; posting on GitHub Enterprise. Still open: trusting only the judge's own statuses; running the judge on a shared machine; `calibrate` and the board rebuild through the judge.
+
+## 2026-11-21 — The guards run without GitHub Actions
+
+Seen in `my-factory-demo` (see the 2026-11-20 entry): where Actions is not allowed, `protected-paths` and `scope-guard` never ran. The only guard was a person reading changed files against two regexes inside a workflow file.
+
+- **`harness/judge/guards.json` and `guards.py` (new):** the two guards' patterns and logic in one place, with tests. `judge-guards.yml` checks out only `harness/judge/` from the base branch and calls `guards.py`, so it still runs no pull request code. The pattern no longer lives in the workflow.
+- **`harness/judge/judge.py` (new, with tests):** the factory judge. It polls the open pull requests and posts both guards as commit statuses, judged by the same `guards.py`, only when a status changes. `--once`, `--dry-run`, `--interval`. The board, dispatcher and branch protection already read commit statuses.
+- **`RUNBOOK.md`, "Without GitHub Actions":** start the judge and require the two statuses in branch protection. **`MODIFYING.md`:** the protected-path pattern's fifth place is now `guards.json`.
+
+Tested: 16 unit tests in `harness/judge`, including one that pins the workflow to `guards.py`; the board and dispatcher tests still pass; a dry run against this kit (no open pull requests). Not tested yet: the workflow on GitHub; posting a real status on GitHub Enterprise. Still open: the judge does not run `gates` or `calibrate`, and does not yet trust only its own statuses.
+
 ## 2026-11-21 — The fence is off in the kit, on in projects
 
 Seen in the kit: the fence that keeps a lap agent out of the factory files also blocked every agent session that was changing the kit itself, which is the kit's whole purpose. No laps run in the kit.
