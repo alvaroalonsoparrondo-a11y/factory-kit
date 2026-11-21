@@ -166,9 +166,9 @@ Per lap: fix rounds; which check failed; anything the agent tried to change that
 Some organisations' GitHub (often GitHub Enterprise) does not allow Actions. Check with `gh api repos/__OWNER__/__PROJECT__/actions/permissions`: `"enabled": false` means no workflow runs. Do not switch Actions on without your organisation's approval. Then the judge does not run on GitHub, and you stand in for it:
 
 - **`gates`:** run `bash harness/run-gates.sh` on the lap's branch before you merge, and merge only when it exits 0.
-- **`protected-paths` and `scope-guard`:** read the pull request's changed files against the two patterns in `.github/workflows/judge-guards.yml`. A hit needs your decision, as the labels would record it.
+- **`protected-paths` and `scope-guard`:** run the factory judge, `python harness/judge/judge.py`, in a clone of the project. Every two minutes it reads the open pull requests and posts these two as commit statuses, judged by `harness/judge/guards.py`, the same code the workflow runs. The board, the dispatcher and branch protection read commit statuses as they read checks. Start with `--once --dry-run` to see what it would post. It uses `FACTORY_JUDGE_TOKEN`, else your `gh` login; the token needs Pull requests read and Commit statuses write, and must never reach a lap. When the judge is not running, read the changed files against the two patterns in `harness/judge/guards.json` yourself; a hit needs your decision, as the labels would record it.
 - **`calibrate`:** run `bash harness/calibrate.sh` locally.
 - **The board** on the `board` branch is not rebuilt; use the live board (`python harness/board/serve.py`).
-- **Branch protection:** require the pull request, not the checks (see one-time setup, step 5).
+- **Branch protection:** require the pull request and, once the judge runs, the `protected-paths` and `scope-guard` statuses. Do not require `gates` yet (see one-time setup, step 5).
 
-This is weaker than the required checks: nothing stops a merge you did not check. Running the judge elsewhere (for example AWS CodeBuild) is planned, not built.
+This is still weaker than the required checks. `gates` is your own run, so nothing stops a merge you did not check. Anyone with write access can post a status, including a lap's `gh`. The judge overwrites a status that disagrees with it on its next pass, but a merge could land before that. The judge running `gates`, and trusting only its own statuses, are the next steps.

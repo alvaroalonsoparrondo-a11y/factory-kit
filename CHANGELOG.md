@@ -2,6 +2,16 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-21 — The guards run without GitHub Actions
+
+Seen in `my-factory-demo` (see the 2026-11-20 entry): where Actions is not allowed, `protected-paths` and `scope-guard` never ran. The only guard was a person reading changed files against two regexes inside a workflow file.
+
+- **`harness/judge/guards.json` and `guards.py` (new):** the two guards' patterns and logic in one place, with tests. `judge-guards.yml` checks out only `harness/judge/` from the base branch and calls `guards.py`, so it still runs no pull request code. The pattern no longer lives in the workflow.
+- **`harness/judge/judge.py` (new, with tests):** the factory judge. It polls the open pull requests and posts both guards as commit statuses, judged by the same `guards.py`, only when a status changes. `--once`, `--dry-run`, `--interval`. The board, dispatcher and branch protection already read commit statuses.
+- **`RUNBOOK.md`, "Without GitHub Actions":** start the judge and require the two statuses in branch protection. **`MODIFYING.md`:** the protected-path pattern's fifth place is now `guards.json`.
+
+Tested: 16 unit tests in `harness/judge`, including one that pins the workflow to `guards.py`; the board and dispatcher tests still pass; a dry run against this kit (no open pull requests). Not tested yet: the workflow on GitHub; posting a real status on GitHub Enterprise. Still open: the judge does not run `gates` or `calibrate`, and does not yet trust only its own statuses.
+
 ## 2026-11-21 — The fence is off in the kit, on in projects
 
 Seen in the kit: the fence that keeps a lap agent out of the factory files also blocked every agent session that was changing the kit itself, which is the kit's whole purpose. No laps run in the kit.
