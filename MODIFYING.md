@@ -18,6 +18,8 @@ harness/           .github/    _bmad/custom/   .gitattributes
 .kiro/agents/                  .kiro/skills/lap/
 ```
 
+**The fence is off in the kit.** The kit is changed by humans and agents they direct, so its own `.claude/settings.json` and `.kiro/agents/factory.json` deny no paths, and the `protected-paths` check skips the kit (it is a template repository). The fenced versions live in `fence/claude-settings.json` and `fence/kiro-factory.json`; `init-project.sh` copies them into place and deletes `fence/`. So a fence change is made in `fence/` in the kit and in `.claude/settings.json` / `.kiro/agents/factory.json` in a project: when you carry one across, move it to the other path.
+
 `MISSION.md` is different: the kit holds only the empty template. A project's filled-in `MISSION.md` belongs to that project and never goes back to the kit.
 
 ## Rule 1: factory changes and product changes never share a commit
@@ -84,7 +86,7 @@ Open the pull request in the project; the agent may open it with `gh`. A human a
 |---|---|---|
 | `harness/run-gates.sh`, or anything that makes a gate easier to pass | It weakens the judge | Run `bash harness/calibrate.sh` before and after. Every defect must still be `CAUGHT`. |
 | `.github/workflows/judge-guards.yml` | It uses `pull_request_target`, which has access to secrets | Never add a step that checks out or runs pull request code. |
-| The protected-path list | It appears in five places | Change all five together: `FACTORY_RULES.md` section 2, `.claude/settings.json`, `.kiro/agents/factory.json`, `.github/CODEOWNERS`, and the pattern in `judge-guards.yml`. |
+| The protected-path list | It appears in five places | Change all five together: `FACTORY_RULES.md` section 2, `.claude/settings.json`, `.kiro/agents/factory.json` (in the kit: `fence/claude-settings.json`, `fence/kiro-factory.json`), `.github/CODEOWNERS`, and the pattern in `judge-guards.yml`. |
 | The `lap` skill | Each agent reads its own copy | Change `.claude/skills/lap/SKILL.md`, then copy it to `.kiro/skills/lap/SKILL.md`. The `gates` workflow fails while the two differ. |
 | The agent instructions | Claude Code and Kiro read one file | Change `AGENTS.md`. `CLAUDE.md` only imports it (`@AGENTS.md`); keep it that way. |
 | The runtime contract in `harness/README.md` | Gates and BMAD's architect rely on it | Update `harness/run-gates.sh` and `_bmad/custom/bmad-architecture.toml` if they mention the item. |

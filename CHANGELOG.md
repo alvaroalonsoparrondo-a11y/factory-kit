@@ -2,6 +2,19 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-21 — The fence is off in the kit, on in projects
+
+Seen in the kit: the fence that keeps a lap agent out of the factory files also blocked every agent session that was changing the kit itself, which is the kit's whole purpose. No laps run in the kit.
+
+- **`fence/claude-settings.json` and `fence/kiro-factory.json` (new)** hold the fenced settings. `init-project.sh` copies them to `.claude/settings.json` and `.kiro/agents/factory.json` and deletes `fence/`, so every project starts fenced as before.
+- **The kit's own `.claude/settings.json` and `.kiro/agents/factory.json`** deny only force pushes.
+- **`judge-guards.yml`:** `protected-paths` skips a template repository (the kit). `scope-guard` is unchanged.
+- **`FACTORY_RULES.md` section 2** says it applies in projects, not in the kit.
+- **`MODIFYING.md`, `README.md`:** a fence change is made in `fence/` in the kit and moved to the live paths when carried to a project.
+- **`AGENT_SETUP.md`:** the after-init check also expects `fence/` to be gone.
+
+The `protected-paths` skip keys on GitHub's template flag. A project made from a local kit folder is not a template, so its guard runs. A kit on a host where it is not marked as a template keeps its guard; there the kit's pull requests still need `human-judge-change`.
+
 ## 2026-11-20 — GitHub Enterprise, a local kit, no Actions (from `my-factory-demo`)
 
 Seen setting up `my-factory-demo` on github.axa.com with Kiro CLI, from a local clone of the kit. The kit assumed github.com everywhere: the template did not exist on the enterprise host, so step 1 stopped; `RUNBOOK.md` and the project `README.md` were filled in with `https://github.com/...` links; `serve.py` refused a non-github.com `origin`, and it and the dispatcher defaulted to `api.github.com`. Actions is not allowed there, so `gates` and `calibrate` never ran, and step 7 then required three checks that can never report: no pull request can merge except by an admin bypass. Setup also had no way to install BMAD for one agent only, and no answer when the environment names no co-author line.

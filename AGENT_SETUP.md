@@ -74,7 +74,7 @@ bash init-project.sh OWNER PROJECT HOST
 
 **Check:**
 - No file contains a placeholder (two underscores, then `OWNER`, `PROJECT`, `PARENT_DIR` or `HOST`, then two underscores), except `MODIFYING.md`, which explains them.
-- `init-project.sh` is gone. `README.md` is now a short project page, and the kit-only files `AGENT_SETUP.md`, `CHANGELOG.md` and `PROJECT_README.md` are gone. Keep following the copy of these instructions you already read.
+- `init-project.sh` is gone. `README.md` is now a short project page, and the kit-only files `AGENT_SETUP.md`, `CHANGELOG.md` and `PROJECT_README.md` are gone, and so is `fence/` (its settings are now in place). Keep following the copy of these instructions you already read.
 - The JSON files `PROJECT/.claude/settings.json` and `PROJECT/.kiro/agents/factory.json` parse. The first has a non-empty deny list, the second a `deny` rule for `fs_write`: they are the fence that keeps Claude Code and Kiro out of the factory files. Check both whatever AGENTS is: they are factory files and stay in the project.
 
 Commit ("Fill in project names") and push.
