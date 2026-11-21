@@ -2,6 +2,22 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-21 — The gates run without GitHub Actions
+
+Seen in `my-factory-demo`, and left open by the entry below: without Actions, `gates` was the person's own run of `run-gates.sh` before each merge. Nothing stopped a merge they had not checked, and a fix round had no failing output to read.
+
+- **`harness/judge/judge.py`** also judges `gates`. It runs `run-gates.sh` on each open pull request merged with `main`, in a worktree of its own clone, and then on `main` itself after each merge.
+  - `harness/` is taken from `main`, so a pull request cannot change the gate that judges it.
+  - The gate runs with no GitHub token in its environment, under a 30-minute limit that kills its whole process tree. The lap-skill copy check from `gates.yml` is included.
+  - One run per pass, oldest pull request first; each commit is judged once. Verdicts are kept in `.factory/judge/verdicts.json`, so a status that disagrees with a verdict is overwritten without running again.
+  - A red gate's log tail goes into one pull request comment, edited in place.
+  - A pull request that conflicts with `main` gets no status; it waits for a "main moved" round.
+  - New flags: `--no-gates`, `--port` (default 8190) and `--gates-timeout`.
+- **`harness/dispatch/dispatch.py`:** with no check run to read, a fix round reads the judge's comment for that commit.
+- **`RUNBOOK.md`, "Without GitHub Actions"** is rewritten around the judge: its own clone, what its machine needs, its token, and requiring all three statuses once it runs. **`AGENT_SETUP.md`** and **`harness/README.md`** point to it.
+
+Tested: 33 tests in `harness/judge`. Six of them run real Git against a local origin: the merge, the harness restored from `main`, no token reaching the gate, the lap-skill check, a conflict, and the timeout kill. Two dispatcher tests cover reading the comment. The board and dispatcher suites still pass, and one real gate run on this kit's `main` passed (no backend: notice only). Not tested yet: a real Spring and Angular project's gates through the judge; posting on GitHub Enterprise. Still open: trusting only the judge's own statuses; running the judge on a shared machine; `calibrate` and the board rebuild through the judge.
+
 ## 2026-11-21 — The guards run without GitHub Actions
 
 Seen in `my-factory-demo` (see the 2026-11-20 entry): where Actions is not allowed, `protected-paths` and `scope-guard` never ran. The only guard was a person reading changed files against two regexes inside a workflow file.

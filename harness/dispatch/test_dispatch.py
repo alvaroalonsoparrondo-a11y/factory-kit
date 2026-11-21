@@ -577,5 +577,37 @@ class StoreFiles(unittest.TestCase):
                 self.assertTrue(again)
 
 
+class JudgeComment(unittest.TestCase):
+    """Without Actions, a fix round reads the failing gates from the factory judge's comment."""
+
+    SHA = "a" * 40
+
+    class Reader:
+        def __init__(self, comments, runs=()):
+            self.comments, self.runs = comments, list(runs)
+
+        def get(self, path, key=None):
+            if path.endswith("/check-runs"):
+                return self.runs
+            if path.endswith("/pulls"):
+                return [{"number": 4}]
+            if path == "/issues/4/comments":
+                return self.comments
+            raise AssertionError(path)
+
+    def summary(self, comments, runs=()):
+        return d.GitHub("o/r", None, self.Reader(comments, runs)).failing_summary(self.SHA, "gates")
+
+    def test_reads_the_judges_comment_for_this_commit(self):
+        body = f"{d.JUDGE_MARKER}\n<!-- sha:{self.SHA} -->\n**gates** failed. Last lines:\nGATE FAIL: x"
+        text = self.summary([{"body": "unrelated"}, {"body": body}])
+        self.assertTrue(text.startswith("**gates** failed"))
+        self.assertIn("GATE FAIL: x", text)
+
+    def test_a_comment_about_another_commit_is_not_used(self):
+        body = f"{d.JUDGE_MARKER}\n<!-- sha:{'b' * 40} -->\nold failure"
+        self.assertEqual(self.summary([{"body": body}]), "(no check run found)")
+
+
 if __name__ == "__main__":
     unittest.main()

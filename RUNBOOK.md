@@ -23,7 +23,7 @@ You drive the factory by hand at three points: you start each lap, you merge the
 5. **Protect `main`** in `__PROJECT__` (Settings → Branches): require a pull request, and require these status checks: `gates`, `protected-paths`, `scope-guard`. A check can only be selected after it has run once, so open a first small pull request (for example, the filled-in `MISSION.md`, with the `human-judge-change` label) and then add the checks.
    - Approvals: 1, by someone other than the person who ran the lap. On a one-person trial: 0, because GitHub does not let you approve your own pull request.
    - On a free GitHub plan, branch protection is not enforced on private repositories. The checks still run and show red or green; you have to respect them yourself.
-   - Where GitHub Actions is not allowed (see "Without GitHub Actions" below), require the pull request but not the three checks: they can never report, so no pull request could merge except by an admin bypassing the rule.
+   - Where GitHub Actions is not allowed (see "Without GitHub Actions" below), start the factory judge first; the three checks then report as commit statuses. Without the judge, require the pull request but not the checks: they would never report, so no pull request could merge except by an admin bypassing the rule.
 6. **Link the kit**, so factory changes can travel: `git remote add kit https://__HOST__/__OWNER__/factory-kit.git`. If the kit exists only as a local clone, give its folder instead: `git remote add kit <path to factory-kit>`.
 
 ## Plan the product (BMAD, interactive, in this folder)
@@ -163,12 +163,28 @@ Per lap: fix rounds; which check failed; anything the agent tried to change that
 
 ## Without GitHub Actions
 
-Some organisations' GitHub (often GitHub Enterprise) does not allow Actions. Check with `gh api repos/__OWNER__/__PROJECT__/actions/permissions`: `"enabled": false` means no workflow runs. Do not switch Actions on without your organisation's approval. Then the judge does not run on GitHub, and you stand in for it:
+Some organisations' GitHub (often GitHub Enterprise) does not allow Actions. Check with `gh api repos/__OWNER__/__PROJECT__/actions/permissions`: `"enabled": false` means no workflow runs. Do not switch Actions on without your organisation's approval. Then the **factory judge** stands in for the workflows:
 
-- **`gates`:** run `bash harness/run-gates.sh` on the lap's branch before you merge, and merge only when it exits 0.
-- **`protected-paths` and `scope-guard`:** run the factory judge, `python harness/judge/judge.py`, in a clone of the project. Every two minutes it reads the open pull requests and posts these two as commit statuses, judged by `harness/judge/guards.py`, the same code the workflow runs. The board, the dispatcher and branch protection read commit statuses as they read checks. Start with `--once --dry-run` to see what it would post. It uses `FACTORY_JUDGE_TOKEN`, else your `gh` login; the token needs Pull requests read and Commit statuses write, and must never reach a lap. When the judge is not running, read the changed files against the two patterns in `harness/judge/guards.json` yourself; a hit needs your decision, as the labels would record it.
-- **`calibrate`:** run `bash harness/calibrate.sh` locally.
+```bash
+git clone https://__HOST__/__OWNER__/__PROJECT__.git judge-__PROJECT__   # its own clone, not a lap's
+cd judge-__PROJECT__
+python harness/judge/judge.py --once --dry-run   # what it would post and run
+python harness/judge/judge.py                    # keep it running: one pass every two minutes
+```
+
+Each pass reads the open pull requests and posts the same three results the workflows post, as commit statuses. The board, the dispatcher and branch protection read commit statuses as they read checks, so nothing else changes.
+
+- **`protected-paths` and `scope-guard`**, for every open pull request on every pass. They are judged by `harness/judge/guards.py`, the same code `judge-guards.yml` runs. A hit still needs your label.
+- **`gates`**: `harness/run-gates.sh` on the pull request merged with `main`, with `harness/` taken from `main`, so a pull request cannot change the gate that judges it. Then on `main` itself, after each merge. One gate run per pass, oldest pull request first, with a 30-minute limit; each commit is judged once.
+  - A red gate's last log lines go into one comment on the pull request, edited in place. The dispatcher's fix round reads that comment.
+  - A pull request that conflicts with `main` gets no `gates` status; it needs a "main moved" round.
+- **What the machine needs:** Java 21, Node 22, Git, Python 3.11+, and a free port 8190 (`--port`). `--no-gates` runs the two guards only, on a machine without Java or Node.
+- **The token:** `FACTORY_JUDGE_TOKEN`, else your `gh` login. It needs Pull requests read and write and Commit statuses write, and must never reach a lap. The gate runs pull request code with no token in its environment; still, run the judge on a machine where nothing else secret is reachable.
+- **Its records:** verdicts and gate logs are kept in `.factory/judge/` in its clone (ignored by Git).
+- **`calibrate`:** run `bash harness/calibrate.sh` in the judge's clone.
 - **The board** on the `board` branch is not rebuilt; use the live board (`python harness/board/serve.py`).
-- **Branch protection:** require the pull request and, once the judge runs, the `protected-paths` and `scope-guard` statuses. Do not require `gates` yet (see one-time setup, step 5).
+- **Branch protection:** once the judge has posted each status once, require all three: `gates`, `protected-paths` and `scope-guard`. A required status that never reports blocks every merge, so do this only while the judge runs.
 
-This is still weaker than the required checks. `gates` is your own run, so nothing stops a merge you did not check. Anyone with write access can post a status, including a lap's `gh`. The judge overwrites a status that disagrees with it on its next pass, but a merge could land before that. The judge running `gates`, and trusting only its own statuses, are the next steps.
+When the judge is not running, nothing is judged. Then run `bash harness/run-gates.sh` on the lap's branch yourself, and read its changed files against the patterns in `harness/judge/guards.json`, before you merge.
+
+Two limits remain. The judge runs only while its machine is on. And anyone with write access can post a status, including a lap's `gh`. The judge overwrites a status that disagrees with its own verdict on its next pass, at most two minutes later, but a merge could land in between. Trusting only the judge's own statuses, and running the judge on a shared machine, are the next steps.
