@@ -23,7 +23,12 @@ Lessons taken from the Archon SDLC pack (`deliver/scripts/round.ts`, `review-syn
 4. **The same finding twice stops early,** as Archon's "same fault twice in a row stops launches" and its review rule against "one nearby symptom per round".
 5. **Counted across every park and unpark,** as Archon's manager counts attempts. A `release` or a new session does not reset the budget; only a recorded human grant adds to it.
 
-Tested: 73 board tests, 8 of them new for the budget; 50 dispatcher tests, 4 new (the lap's rounds share the budget, deleting the record buys nothing, a grant adds a round, the main-moved brake). `bmad-build.toml` parses. Not tested yet: a real lap, and a BMAD review loopback calling `take`. Still open: the factory judge (pull request #8) should also refuse new commits once a pull request's budget is spent, as a brake outside the agent for laps run by hand.
+After pull request #8 merged, the factory judge brakes too:
+
+- **`harness/judge/judge.py`:** counts each pull request's red `gates` runs; a timeout does not count. Once they reach the budget, it judges no new commit and posts `gates` red, "Round budget spent". The label `human-granted-round` gives one more round each time a human adds it, read from the pull request's events. This is the brake outside the agent for laps run by hand, and it holds when a lap's own record is lost.
+- **Lap step A10** takes a `ci` round before fixing a red `gates` from the judge, and stops on "Round budget spent". **Setup** creates the third label.
+
+Tested: 42 judge tests, 4 new (the brake, a grant by label, a timeout does not count, each pull request has its own count); 73 board tests, 8 of them new for the budget; 50 dispatcher tests, 4 new (the lap's rounds share the budget, deleting the record buys nothing, a grant adds a round, the main-moved brake). `bmad-build.toml` parses. Not tested yet: a real lap, and a BMAD review loopback calling `take`. Still open: the judge counts only red `gates` runs, not the lap's review and local gate rounds, which it cannot see. It cannot yet tell a red caused by the change from one caused by the machine; sorting the cause is planned with runtime verification.
 ## 2026-11-21 — The lap runs the judge, and hands over a judged pull request
 
 Seen in review of the entry below: a lap run by hand ended with a command for the person to type. The factory's job is a pull request that is ready to merge, so the person had become the CI again.

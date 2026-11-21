@@ -48,6 +48,7 @@ Hard rules for the whole lap (from `FACTORY_RULES.md`):
 10. **Judge (only without GitHub Actions).** Run the factory judge on the pull request: `python harness/judge/judge.py --once --pr <number> --port <port + 100>`. It posts the three checks as commit statuses, from `harness/` on `main`, and prints one line with the results. Never post a status any other way.
     - Exit 0, all three green: tell the user the pull request is ready for their review and merge, with its URL and the judge's line. Stop.
     - `gates` red: do a fix round (section B) with the judge's comment as the failure: it takes a `ci` round first, and when `take` refuses, the lap stops there. Then run the judge again.
+    - `gates` red with "Round budget spent": the judge will not judge another commit. Stop and signal `waiting limit "round budget spent on the pull request"`; only a human grants a round.
     - `protected-paths` or `scope-guard` red: section B, rule 2. If the change is needed, stop and signal `waiting decision "<check>: <the paths>"`; the label is the human's call.
     - No `gates` result, because the branch conflicts with `main`: do section D, then run the judge again.
     - The judge itself fails (no Java, no network, port taken): signal `waiting manual-step "<its error>"` and stop. It is not a fix round.
