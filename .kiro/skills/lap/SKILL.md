@@ -38,12 +38,14 @@ Hard rules for the whole lap (from `FACTORY_RULES.md`):
 
    If `gh` fails, print its error, the path of the file, and a link that opens the pull request form already filled in: `https://<host>/<owner>/<repo>/compare/main...story/<ticket-id>?expand=1&title=<title>&body=<body>`, with the title and body URL-encoded (take host, owner and repo from `git remote get-url origin`; the host is `github.com` or a GitHub Enterprise host). If that link would be longer than 8000 characters, print it without `title` and `body` and say to paste them from the file.
 
+   Without GitHub Actions (`gh api repos/<owner>/<repo>/actions/permissions` shows `"enabled": false`), no CI judges the pull request on its own. Tell the user the command that does, with the real number: `python harness/judge/judge.py --once --pr <number>`, run in a clone of the project. It posts the three checks and says whether the pull request is ready. Do not run it yourself: the lap does not judge its own work. A dispatched lap skips this; the dispatcher's human runs the judge.
+
    Then stop. The lap now waits for CI and the human.
 
 ## B. Fix round (the user pastes a failing check)
 
 1. Make sure you are on the lap's branch.
-2. Read the failure.
+2. Read the failure. Without GitHub Actions, a red `gates` from the factory judge has its last log lines in the judge's comment on the pull request (it starts with `<!-- factory-judge:gates -->`); when the user only says the check is red, read that comment with `gh api repos/<owner>/<repo>/issues/<number>/comments`.
    - `gates`: reproduce with `PORT=<port> bash harness/run-gates.sh`, fix, run again until green.
    - `protected-paths` or `scope-guard`: you changed something you may not change. Revert that part. If the ticket cannot be done without it, stop and say so.
 3. Commit and `git push`. Tell the user in one line what you changed.

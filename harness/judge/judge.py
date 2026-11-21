@@ -3,8 +3,16 @@
 
 Part of the judge. Standard library only (Python 3.11+).
 
-  python harness/judge/judge.py [--root .] [--once] [--interval 120] [--dry-run]
+  python harness/judge/judge.py [--root .] [--once] [--pr N] [--interval 120] [--dry-run]
                                 [--no-gates] [--port 8190] [--gates-timeout 30]
+
+On demand, when a lap has opened its pull request (no need to keep anything running):
+
+  python harness/judge/judge.py --once --pr 12
+
+judges that pull request (both guards and the gates), prints its three results and exits 0 only
+when all three are green. `--once` without `--pr` judges everything open, `main` included, and
+exits. Without `--once` it keeps running, one pass every `--interval` seconds.
 
 Each pass reads the open pull requests and posts the commit statuses the workflows would post
 as checks, so the board, the dispatcher and branch protection see them as they see checks:
@@ -216,8 +224,9 @@ def tail(path, lines=LOG_TAIL_LINES, limit=60000):
 
 class Judge:
     def __init__(self, gh, ws=None, verdicts=None, dry_run=False, out=print, port=DEFAULT_PORT,
-                 timeout=DEFAULT_TIMEOUT_MINUTES * 60):
-        self.gh, self.ws, self.dry_run, self.out = gh, ws, dry_run, out
+                 timeout=DEFAULT_TIMEOUT_MINUTES * 60, only=None):
+        self.gh, self.ws, self.dry_run, self.out, self.only = gh, ws, dry_run, out, only
+        self.last_ran, self.results = None, {}
         self.verdicts = verdicts if verdicts is not None else Verdicts()
         self.port, self.timeout = port, timeout
 
@@ -272,11 +281,12 @@ class Judge:
             if v.get("conflict_with") == main:
                 continue  # waits for a "main moved" round or for main to move
             todo.append(pr)
-        main_current = self.statuses(main)
-        main_judged = self._enforce(main, main_current, "main ")
         if todo:
-            return self.run_gates(todo[0], main)
-        if not main_judged:
+            return self.run_gates(todo[0], main, currents[todo[0]["head"]["sha"]])
+        if self.only is not None:  # judging one pull request: main is not its business
+            return None
+        main_current = self.statuses(main)
+        if not self._enforce(main, main_current, "main "):
             return self.run_gates(None, main, main_current)
         return None
 
@@ -340,6 +350,10 @@ class Judge:
         template = bool(self.gh.get("").get("is_template"))
         posted, currents = [], {}
         pulls = self.gh.get("/pulls?state=open")
+        if self.only is not None:
+            pulls = [pr for pr in pulls if pr["number"] == self.only]
+            if not pulls:
+                self.out(f"#{self.only} is not an open pull request")
         judged = []
         for pr in pulls:
             try:
@@ -354,9 +368,30 @@ class Judge:
                 ran = self.gates_pass(judged, currents)
             except (RuntimeError, urllib.error.URLError, subprocess.CalledProcessError) as e:
                 self.out(f"gates: not run this pass: {getattr(e, 'stderr', '') or e}")
+        self.last_ran = ran
+        self.results = {pr["number"]: {c: (currents[pr["head"]["sha"]].get(c) or {}).get("state", "missing")
+                                       for c in (GATES, *guards.CHECKS)} for pr in judged}
         self.out(f"pass done: {len(pulls)} open pull request(s), {len(posted)} guard status(es) "
                  f"{'to post' if self.dry_run else 'posted'}, gates: {ran[1] if ran else 'nothing to run'}")
         return posted
+
+    def drain(self, limit=50):
+        """Passes until no gate is left to run (one pass in a dry run)."""
+        for _ in range(limit):
+            self.run_pass()
+            if self.dry_run or self.last_ran is None:
+                return
+
+    def verdict(self, number):
+        """For `--pr`: one line with the three results, and whether the pull request may merge."""
+        results = self.results.get(number)
+        if not results:
+            return False, f"#{number}: not judged"
+        if not self.ws:
+            results = {c: s for c, s in results.items() if c != GATES}
+        ok = all(s == "success" for s in results.values())
+        text = ", ".join(f"{c} {s}" for c, s in results.items())
+        return ok, f"#{number}: {text}. {'Ready for your review and merge.' if ok else 'Not ready to merge.'}"
 
 
 def origin(root):
@@ -371,7 +406,8 @@ def origin(root):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--root", default=".", help="the judge's own clone of the project")
-    p.add_argument("--once", action="store_true", help="one pass, then exit")
+    p.add_argument("--once", action="store_true", help="judge what is waiting, then exit")
+    p.add_argument("--pr", type=int, help="judge only this pull request (with --once: exit 0 only when it is green)")
     p.add_argument("--interval", type=int, default=120, help="seconds between passes (default 120)")
     p.add_argument("--dry-run", action="store_true", help="print what would be posted or run; do neither")
     p.add_argument("--no-gates", action="store_true", help="the two guards only (a machine without Java or Node)")
@@ -384,17 +420,24 @@ def main(argv=None):
     folder = root / ".factory" / "judge"
     judge = Judge(GitHub(repo, server, token), ws=None if a.no_gates else Workspace(root, folder),
                   verdicts=Verdicts(folder / "verdicts.json"), dry_run=a.dry_run, port=a.port,
-                  timeout=a.gates_timeout * 60)
+                  timeout=a.gates_timeout * 60, only=a.pr)
     print(f"judging {repo} on {server}{' (dry run)' if a.dry_run else ''}{' (guards only)' if a.no_gates else ''}")
+    if a.once:
+        try:
+            judge.drain()
+        except (RuntimeError, urllib.error.URLError) as e:
+            print(f"pass failed: {e}")
+            return 1
+        if a.pr is None:
+            return 0
+        ok, line = judge.verdict(a.pr)
+        print(line)
+        return 0 if ok or a.dry_run else 1
     while True:
         try:
             judge.run_pass()
         except (RuntimeError, urllib.error.URLError) as e:
             print(f"pass failed: {e}")
-            if a.once:
-                return 1
-        if a.once:
-            return 0
         time.sleep(a.interval)
 
 

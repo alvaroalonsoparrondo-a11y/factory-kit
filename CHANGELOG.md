@@ -2,6 +2,16 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-21 — The judge on demand, for laps run by hand
+
+Seen while planning the judge for `my-factory-demo`: the person runs laps by saying "run a lap", not with the dispatcher, so a judge that has to keep running did not fit.
+
+- **`harness/judge/judge.py`:** `--pr <n>` judges one pull request (both guards and the gates; not `main`). `--once` now judges everything waiting and then exits; before, it ran one gate. `--once --pr <n>` prints the three results in one line and exits 0 only when all three are green.
+- **`lap` skill (both copies):** step A9, without Actions, tells the user the exact judge command for the new pull request. The lap does not run the judge itself, so it never judges its own work. Section B reads a red `gates` from the judge's comment.
+- **`RUNBOOK.md`, "Without GitHub Actions":** leads with the on-demand way for laps run by hand, then the always-on way for the dispatcher.
+
+Tested: 37 tests in `harness/judge` (one pull request only, red is not ready, a pull request that is not open, `--once` judges everything and stops); a dry run against this kit.
+
 ## 2026-11-21 — The gates run without GitHub Actions
 
 Seen in `my-factory-demo`, and left open by the entry below: without Actions, `gates` was the person's own run of `run-gates.sh` before each merge. Nothing stopped a merge they had not checked, and a fix round had no failing output to read.

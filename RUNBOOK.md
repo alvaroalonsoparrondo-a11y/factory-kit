@@ -165,14 +165,22 @@ Per lap: fix rounds; which check failed; anything the agent tried to change that
 
 Some organisations' GitHub (often GitHub Enterprise) does not allow Actions. Check with `gh api repos/__OWNER__/__PROJECT__/actions/permissions`: `"enabled": false` means no workflow runs. Do not switch Actions on without your organisation's approval. Then the **factory judge** stands in for the workflows:
 
+**When you run laps yourself** ("run a lap"), nothing needs to keep running. When a lap has opened its pull request, it tells you the number; then, in a clone of the project (your main checkout will do):
+
 ```bash
-git clone https://__HOST__/__OWNER__/__PROJECT__.git judge-__PROJECT__   # its own clone, not a lap's
-cd judge-__PROJECT__
-python harness/judge/judge.py --once --dry-run   # what it would post and run
-python harness/judge/judge.py                    # keep it running: one pass every two minutes
+python harness/judge/judge.py --once --pr 12
 ```
 
-Each pass reads the open pull requests and posts the same three results the workflows post, as commit statuses. The board, the dispatcher and branch protection read commit statuses as they read checks, so nothing else changes.
+It judges that pull request: both guards, then the gates on the pull request merged with `main`. It posts the three results and prints them in one line: `#12: gates success, protected-paths success, scope-guard success. Ready for your review and merge.` It exits 0 only when all three are green. When `gates` is red, say `lap <ticket> fix round` in the lap's session: the lap reads the failing lines from the judge's comment on the pull request. After the fix is pushed, run the same command again. After a merge, `python harness/judge/judge.py --once` also judges the new `main`.
+
+**When the dispatcher runs laps,** keep the judge running instead, in its own clone, so every pull request is judged without you:
+
+```bash
+python harness/judge/judge.py --once --dry-run   # what it would post and run
+python harness/judge/judge.py                    # one pass every two minutes
+```
+
+Either way the judge posts the same three results the workflows post, as commit statuses. The board, the dispatcher and branch protection read commit statuses as they read checks, so nothing else changes.
 
 - **`protected-paths` and `scope-guard`**, for every open pull request on every pass. They are judged by `harness/judge/guards.py`, the same code `judge-guards.yml` runs. A hit still needs your label.
 - **`gates`**: `harness/run-gates.sh` on the pull request merged with `main`, with `harness/` taken from `main`, so a pull request cannot change the gate that judges it. Then on `main` itself, after each merge. One gate run per pass, oldest pull request first, with a 30-minute limit; each commit is judged once.
@@ -183,8 +191,8 @@ Each pass reads the open pull requests and posts the same three results the work
 - **Its records:** verdicts and gate logs are kept in `.factory/judge/` in its clone (ignored by Git).
 - **`calibrate`:** run `bash harness/calibrate.sh` in the judge's clone.
 - **The board** on the `board` branch is not rebuilt; use the live board (`python harness/board/serve.py`).
-- **Branch protection:** once the judge has posted each status once, require all three: `gates`, `protected-paths` and `scope-guard`. A required status that never reports blocks every merge, so do this only while the judge runs.
+- **Branch protection:** once the judge has posted each status once, require all three: `gates`, `protected-paths` and `scope-guard`. Then a pull request cannot merge until the judge has passed it, whether you run the judge on demand or keep it running.
 
 When the judge is not running, nothing is judged. Then run `bash harness/run-gates.sh` on the lap's branch yourself, and read its changed files against the patterns in `harness/judge/guards.json`, before you merge.
 
-Two limits remain. The judge runs only while its machine is on. And anyone with write access can post a status, including a lap's `gh`. The judge overwrites a status that disagrees with its own verdict on its next pass, at most two minutes later, but a merge could land in between. Trusting only the judge's own statuses, and running the judge on a shared machine, are the next steps.
+Two limits remain. Nothing is judged until you run the judge, or while its machine is off. And anyone with write access can post a status, including a lap's `gh`. The judge overwrites a status that disagrees with its own verdict on its next pass, at most two minutes later, but a merge could land in between. Trusting only the judge's own statuses, and running the judge on a shared machine, are the next steps.

@@ -307,6 +307,40 @@ class GatesTests(unittest.TestCase):
         self.assertEqual((ws.runs, gh.posts), ([], []))
         self.assertTrue(any("would run gates" in line for line in lines))
 
+    def test_on_demand_for_one_pull_request(self):
+        gh, ws, _, _ = self.setup([pr(3, "a" * 40), pr(5, "b" * 40)])
+        lines = []
+        jd = j.Judge(gh, ws=ws, out=lines.append, only=5)
+        jd.drain()
+        self.assertEqual(ws.runs, ["b" * 40])  # not #3, and not main
+        self.assertEqual({p[0] for p in gh.posts}, {"b" * 40})
+        ok, line = jd.verdict(5)
+        self.assertTrue(ok)
+        self.assertIn("gates success", line)
+        self.assertIn("Ready for your review", line)
+
+    def test_on_demand_red_is_not_ready(self):
+        gh, ws, _, _ = self.setup([pr(5, "b" * 40)], codes={"b" * 40: 1})
+        jd = j.Judge(gh, ws=ws, out=[].append, only=5)
+        jd.drain()
+        ok, line = jd.verdict(5)
+        self.assertFalse(ok)
+        self.assertIn("gates failure", line)
+
+    def test_on_demand_for_a_pull_request_that_is_not_open(self):
+        gh, ws, _, _ = self.setup([pr(3, "a" * 40)])
+        lines = []
+        jd = j.Judge(gh, ws=ws, out=lines.append, only=9)
+        jd.drain()
+        self.assertEqual(ws.runs, [])
+        self.assertFalse(jd.verdict(9)[0])
+        self.assertIn("#9 is not an open pull request", lines)
+
+    def test_once_judges_everything_waiting_then_stops(self):
+        gh, ws, jd, _ = self.setup([pr(3, "a" * 40), pr(5, "b" * 40)])
+        jd.drain()
+        self.assertEqual(ws.runs, ["a" * 40, "b" * 40, MAIN])
+
     def test_verdicts_survive_a_restart(self):
         folder = Path(tempfile.mkdtemp()) / ".factory" / "judge"
         v = j.Verdicts(folder / "verdicts.json")
