@@ -173,6 +173,16 @@ Every lap has one budget of **3 rounds** (`harness/rounds.json`), shared by ever
 - **Without GitHub Actions, the judge brakes too.** The factory judge counts the red `gates` runs of each pull request (a timeout does not count: it may be the machine). Once they reach the budget, it judges no new commit and posts `gates` red with "Round budget spent". To give one more round, add the label `human-granted-round` to the pull request; each time it is added counts once, so remove it and add it again for another. This brake holds even when a lap's own record is lost.
 - **Changing the budget.** Edit `budget` in `harness/rounds.json`: one number for the whole factory.
 
+## Runtime verification
+
+The gates prove that the tests the builder wrote pass. Runtime verification asks a different agent whether the running app does what the ticket says. Adapted from Archon's `archon-verify-runtime`.
+
+- **The scenario** is `docs/runtime/<ref>.json`, one assertion per acceptance criterion. The product owner writes it when the ticket is planned (`bmad-agent-po` does this), and it is committed to `main` before the lap. The lap reads it from `main` and is refused if its own copy differs, so the builder cannot loosen the test it is judged by.
+- **The lap runs it after green gates** (lap step 7). `harness/runtime/verify.py <ref> start` starts the jar fresh with empty data, checks its build identity, makes a new evidence folder and writes the verifier's prompt. A context-free subagent then follows that prompt: it uses the running app, saves raw tool output as evidence and writes a report. `verify.py <ref> check` stops the app and judges the report.
+- **What it decides.** `verified`; `failed` (a well-formed report shows the app contradicting an assertion: a `runtime` round); `inconclusive` (something could not be judged, the build identity disagreed, or the verifier wrote in the checkout: no round, the lap stops for you); `malformed` (the report broke its rules: one fresh attempt, then `inconclusive`). The script checks coverage, fields, evidence files and identity; it does not second-guess the observations.
+- **What you see.** The pull request carries `verify.py <ref> summary`: the verdict, the candidate and one line per assertion. The evidence stays in the lap's checkout, in `.lap/runtime/<ref>/` (ignored by Git), for when you want to look.
+- **Not yet:** it runs only in the lap, not in CI or in the factory judge, and it is not a required check. It costs one agent session per lap, plus at most one retry.
+
 ## Without GitHub Actions
 
 Some organisations' GitHub (often GitHub Enterprise) does not allow Actions. Check with `gh api repos/__OWNER__/__PROJECT__/actions/permissions`: `"enabled": false` means no workflow runs. Do not switch Actions on without your organisation's approval. Then the **factory judge** stands in for the workflows:
