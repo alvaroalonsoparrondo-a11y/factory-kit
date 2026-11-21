@@ -22,6 +22,8 @@ CI can only judge an application it can start. The application must keep this co
 
 `harness/run-gates.sh` runs all three gates. CI runs exactly this script; you can run it locally too (Git Bash on Windows).
 
+Where GitHub Actions is not allowed, the factory judge (`harness/judge/judge.py`) runs this same script on each pull request merged with `main`, and posts the result as the `gates` commit status. It also posts `protected-paths` and `scope-guard`, judged by `harness/judge/guards.py`, the same code `judge-guards.yml` runs. See `RUNBOOK.md`, "Without GitHub Actions".
+
 1. **Static + unit:** frontend lint, unit tests and build; backend `verify`.
 2. **Contract:** inside backend `verify` (see above).
 3. **End-to-end on a fresh application:** start the jar with an empty `APP_DATA_DIR`, wait for health, check `/build-id` equals the candidate, run the Playwright journeys.

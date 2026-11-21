@@ -29,7 +29,7 @@
       },
       {
         "capability": "shell",
-        "match": ["git push --force*", "git push -f*", "*lap_round.py* grant*"],
+        "match": ["git push --force*", "git push -f*", "gh api*statuses*", "*lap_round.py* grant*"],
         "effect": "deny"
       }
     ]

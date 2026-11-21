@@ -2,7 +2,12 @@
 #
 # Uses pull_request_target on purpose: the workflow always runs as it is on the
 # base branch, so a pull request cannot switch its own guard off. It never
-# checks out or runs pull request code; it only reads the list of changed files.
+# checks out or runs pull request code: it checks out only harness/judge/ from
+# the base branch and reads the list of changed files.
+#
+# The patterns live in harness/judge/guards.json; harness/judge/guards.py judges.
+# The factory judge (harness/judge/judge.py) uses the same two files where Actions
+# is not allowed.
 name: judge-guards
 
 on:
@@ -10,6 +15,7 @@ on:
     types: [opened, synchronize, reopened, labeled, unlabeled, edited]
 
 permissions:
+  contents: read
   pull-requests: read
 
 jobs:
@@ -17,6 +23,12 @@ jobs:
     if: ${{ !github.event.repository.is_template }}
     runs-on: ubuntu-latest
     steps:
+      - name: The guard, from the base branch only
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          sparse-checkout: harness/judge
+          persist-credentials: false
       - name: Fail if the pull request touches the judge
         env:
           GH_TOKEN: ${{ github.token }}
@@ -24,19 +36,18 @@ jobs:
           REPO: ${{ github.repository }}
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
-          files="$(gh api "repos/$REPO/pulls/$PR/files" --paginate -q '.[] | .filename, (.previous_filename // empty)')"
-          hits="$(printf '%s\n' "$files" | grep -E '^(MISSION\.md|FACTORY_RULES\.md|AGENTS\.md|CLAUDE\.md|harness/|\.github/|\.claude/settings\.json|\.claude/skills/lap/|\.kiro/agents/|\.kiro/skills/lap/|_bmad/custom/)' || true)"
-          if [ -z "$hits" ]; then echo "No protected path touched."; exit 0; fi
-          echo "Protected paths touched:"; printf '%s\n' "$hits"
-          case ",$LABELS," in
-            *,human-judge-change,*) echo "Allowed by label human-judge-change."; exit 0 ;;
-          esac
-          echo "A human must add the label human-judge-change to allow this."
-          exit 1
+          gh api "repos/$REPO/pulls/$PR/files" --paginate -q '.[] | .filename, (.previous_filename // empty)' \
+            | python3 harness/judge/guards.py protected-paths --labels "$LABELS"
 
   scope-guard:
     runs-on: ubuntu-latest
     steps:
+      - name: The guard, from the base branch only
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          sparse-checkout: harness/judge
+          persist-credentials: false
       - name: Fail on irreversible kinds of change
         env:
           GH_TOKEN: ${{ github.token }}
@@ -44,12 +55,5 @@ jobs:
           REPO: ${{ github.repository }}
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
-          files="$(gh api "repos/$REPO/pulls/$PR/files" --paginate -q '.[].filename')"
-          hits="$(printf '%s\n' "$files" | grep -Ei '(db/migration/|/migrations?/|liquibase|flyway|security|/auth/|oauth|jwt|password|credential|\.pem$|\.jks$|\.p12$|Dockerfile|/deploy/|terraform)' || true)"
-          if [ -z "$hits" ]; then echo "No irreversible signal in the changed paths."; exit 0; fi
-          echo "Paths that look like identity, migration, secret or deployment changes:"; printf '%s\n' "$hits"
-          case ",$LABELS," in
-            *,human-approved-irreversible,*) echo "Allowed by label human-approved-irreversible."; exit 0 ;;
-          esac
-          echo "A human must add the label human-approved-irreversible to allow this."
-          exit 1
+          gh api "repos/$REPO/pulls/$PR/files" --paginate -q '.[].filename' \
+            | python3 harness/judge/guards.py scope-guard --labels "$LABELS"

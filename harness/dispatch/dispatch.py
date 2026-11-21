@@ -50,6 +50,7 @@ import lap_round  # noqa: E402  (the lap's round budget, shared by every check: 
 # A clean merge of main is not a round (it says nothing about the ticket), but a lap that falls behind
 # again and again is spending without progress: after this many, it stops for the human.
 MAX_MOVED_ROUNDS = 3
+JUDGE_MARKER = "<!-- factory-judge:gates -->"  # the factory judge's failing-gates comment (harness/judge/judge.py)
 DEFAULT_CAP = 2
 BASE_PORT = 8090  # 8080 is the human's app, 8081 a hand-started worktree lap
 QUIET_MINUTES = 60  # a running lap with no file change for this long has probably died without ending
@@ -218,7 +219,7 @@ class GitHub:
             return "failed (no description)"
         runs = [r for r in self.get(f"/commits/{sha}/check-runs", key="check_runs") if r["name"] == check]
         if not runs:
-            return "(no check run found)"
+            return self._judge_comment(sha, check) or "(no check run found)"
         run = max(runs, key=lambda r: r.get("id", 0))
         out = run.get("output") or {}
         parts = [p for p in (out.get("title"), out.get("summary"), out.get("text")) if p]
@@ -227,6 +228,20 @@ class GitHub:
             parts.append("Last lines of the job log:\n" + log)
         parts.append(f"Details: {run.get('html_url', '')}")
         return "\n\n".join(parts)[-6000:]
+
+    def _judge_comment(self, sha, check):
+        """Without Actions, the factory judge (harness/judge/judge.py) puts the failing tail in a comment."""
+        if check != "gates":
+            return None
+        try:
+            for pr in self.get(f"/commits/{sha}/pulls"):
+                for c in self.get(f"/issues/{pr['number']}/comments"):
+                    body = c.get("body") or ""
+                    if JUDGE_MARKER in body and f"<!-- sha:{sha} -->" in body:
+                        return body.split(f"<!-- sha:{sha} -->", 1)[1].strip()[-6000:]
+        except (RuntimeError, urllib.error.URLError):
+            return None
+        return None
 
     def _job_log_tail(self, job_id, lines=80):
         text = ""

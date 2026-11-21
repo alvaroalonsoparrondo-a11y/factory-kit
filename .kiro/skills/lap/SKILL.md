@@ -43,15 +43,24 @@ Hard rules for the whole lap (from `FACTORY_RULES.md`):
 
    If `gh` fails, print its error, the path of the file, and a link that opens the pull request form already filled in: `https://<host>/<owner>/<repo>/compare/main...story/<ticket-id>?expand=1&title=<title>&body=<body>`, with the title and body URL-encoded (take host, owner and repo from `git remote get-url origin`; the host is `github.com` or a GitHub Enterprise host). If that link would be longer than 8000 characters, print it without `title` and `body` and say to paste them from the file.
 
-   Then stop. The lap now waits for CI and the human.
+   With GitHub Actions, stop here: CI judges the pull request, and the lap waits for CI and the human. Without it (`gh api repos/<owner>/<repo>/actions/permissions` shows `"enabled": false`), nothing judges it yet: go on to step 10.
+
+10. **Judge (only without GitHub Actions).** Run the factory judge on the pull request: `python harness/judge/judge.py --once --pr <number> --port <port + 100>`. It posts the three checks as commit statuses, from `harness/` on `main`, and prints one line with the results. Never post a status any other way.
+    - Exit 0, all three green: tell the user the pull request is ready for their review and merge, with its URL and the judge's line. Stop.
+    - `gates` red: do a fix round (section B) with the judge's comment as the failure: it takes a `ci` round first, and when `take` refuses, the lap stops there. Then run the judge again.
+    - `protected-paths` or `scope-guard` red: section B, rule 2. If the change is needed, stop and signal `waiting decision "<check>: <the paths>"`; the label is the human's call.
+    - No `gates` result, because the branch conflicts with `main`: do section D, then run the judge again.
+    - The judge itself fails (no Java, no network, port taken): signal `waiting manual-step "<its error>"` and stop. It is not a fix round.
+
+    A dispatched lap skips this step: it has no GitHub token, so the dispatcher's human runs the judge.
 
 ## B. Fix round (the user pastes a failing check)
 
 1. Make sure you are on the lap's branch.
-2. Read the failure.
+2. Read the failure. Without GitHub Actions, a red `gates` from the factory judge has its last log lines in the judge's comment on the pull request (it starts with `<!-- factory-judge:gates -->`); when the user only says the check is red, read that comment with `gh api repos/<owner>/<repo>/issues/<number>/comments`.
    - `gates`: reproduce with `PORT=<port> bash harness/run-gates.sh`, fix, run again until green.
    - `protected-paths` or `scope-guard`: you changed something you may not change. Revert that part. If the ticket cannot be done without it, stop and say so.
-3. Commit and `git push`. Tell the user in one line what you changed.
+3. Commit and `git push`. Tell the user in one line what you changed. Without GitHub Actions, then run the judge again (step A10).
 4. Every fix here takes a round first: source `ci` (step 2, `gates`). A guard needs no round: reverting a change you may not make is not a fix that is checked again. When `take` refuses, stop and recommend that the product owner split or rewrite the ticket, with the findings it printed.
 
 ## C. After the merge (the user says it merged)

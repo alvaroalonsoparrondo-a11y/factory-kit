@@ -130,7 +130,7 @@ git remote add kit KIT && git fetch kit                                  # from 
 
 Try to protect `main` in `OWNER/PROJECT` through the API (`gh api --hostname HOST -X PUT repos/OWNER/PROJECT/branches/main/protection --input <file>`; write the JSON body to a file, because piping it through a Windows shell can garble it): require a pull request; 0 required approvals; required status checks `gates`, `protected-paths` and `scope-guard`.
 
-- If step 6 found that Actions cannot run, leave out the required status checks: they would never report, so no pull request could merge except by an admin bypassing the rule. Report the checks as open.
+- If step 6 found that Actions cannot run, leave out the required status checks: until the factory judge runs, they would never report, so no pull request could merge except by an admin bypassing the rule. Report the checks as open, to be required once the person runs the judge.
 - If GitHub refuses (a free plan answers 403 "Upgrade to GitHub Pro or make this repository public" for a private repository), do not work around it. Report it as open.
 
 ## Step 8: Report
@@ -141,7 +141,7 @@ Give the person a short report:
 2. A table of steps 1–7: done, failed or open, one line each, with evidence (commit ids, workflow run links).
 3. What is left for them, with exact instructions:
    - Branch protection, if step 7 is open.
-   - Without Actions: the checks they run themselves before each merge (`RUNBOOK.md`, "Without GitHub Actions").
+   - Without Actions: each lap runs the factory judge on its own pull request (lap step A10); require the three checks once the first lap has posted them (`RUNBOOK.md`, "Without GitHub Actions"). The judge needs Java 21 and Node 22 on the machine where laps run.
    - Plan the product with BMAD, fill in `MISSION.md` themselves, then say "run a lap".
 4. Anything that surprised you, or that this file or the kit's other documents got wrong, so the kit can be fixed.
 

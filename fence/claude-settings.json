@@ -16,7 +16,9 @@
       "Bash(git push -f*)",
       "Edit(/.lap/*.jsonl)",
       "Write(/.lap/*.jsonl)",
-      "Bash(*lap_round.py* grant*)"
+      "Bash(*lap_round.py* grant*)",
+      "Bash(gh api *statuses*)",
+      "Bash(gh api*/statuses/*)"
     ]
   }
 }
