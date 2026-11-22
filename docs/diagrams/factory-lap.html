@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Factory Kit Lap Map</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+<style>
+/* Layout: one wide swimlane figure as the spine, then three short reference blocks underneath. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --lane: #eceff4;
+  --fg: #1b2230;
+  --muted: #5b6577;
+  --line: #c9d0db;
+  --judge: #b4580a;      /* the judge: CI, the part the agent cannot change */
+  --red: #b42318;
+  --green: #217a45;
+  --sans: "IBM Plex Sans", system-ui, sans-serif;
+  --cond: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161d; --surface: #1a2029; --lane: #1f2631; --fg: #e4e8ef; --muted: #98a2b3;
+    --line: #3a4453; --judge: #f0a35e; --red: #f2786b; --green: #5fc58a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161d; --surface: #1a2029; --lane: #1f2631; --fg: #e4e8ef; --muted: #98a2b3;
+  --line: #3a4453; --judge: #f0a35e; --red: #f2786b; --green: #5fc58a; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--sans); }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; }
+.wrap > * { min-width: 0; }
+header { display: grid; gap: 10px; max-width: 70ch; }
+.eyebrow { font: 500 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--judge); }
+h1 { font: 600 clamp(28px, 4vw, 40px)/1.1 var(--cond); margin: 0; text-wrap: balance; }
+h2 { font: 600 20px/1.2 var(--cond); margin: 0 0 12px; text-wrap: balance; }
+p { margin: 0; }
+.lede { color: var(--muted); font-size: 17px; }
+code { font: 13px var(--mono); }
+figure { margin: 0; display: grid; gap: 12px; }
+.scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.scroll svg { display: block; width: 100%; min-width: 980px; height: auto; color: var(--fg); }
+figcaption { color: var(--muted); max-width: 80ch; font-size: 14px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 28px; }
+.cols > section { min-width: 0; }
+ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.who { font: 600 12px var(--mono); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 6px; }
+.who.h { color: var(--fg); } .who.a { color: var(--muted); } .who.j { color: var(--judge); }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 12px var(--mono); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+td:last-child { font-family: var(--mono); font-size: 13px; }
+.note { border-left: 3px solid var(--judge); padding: 4px 0 4px 14px; max-width: 80ch; color: var(--muted); }
+</style>
+<style>body { margin: 0; }</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">factory-kit · BMAD v7 · Kiro CLI</div>
+    <h1>A software factory is a repeatable loop around software work.</h1>
+    <p class="lede">You plan the release, the factory builds it, you test it in staging. What you find there feeds the next plan, and the loop runs again.</p>
+  </header>
+
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 960 190" style="min-width: 640px" role="img" aria-label="The release loop: you plan the release, the factory builds it one ticket per lap, you test it in staging, and what you find becomes the next tickets.">
+        <defs>
+          <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker>
+        </defs>
+        <g font-family="IBM Plex Sans, sans-serif" text-anchor="middle">
+          <rect x="40" y="28" width="240" height="68" rx="6" fill="var(--lane)" stroke="currentColor" stroke-width="1.2"/>
+          <rect x="360" y="28" width="240" height="68" rx="6" fill="var(--surface)" stroke="var(--judge)" stroke-width="2"/>
+          <rect x="680" y="28" width="240" height="68" rx="6" fill="var(--lane)" stroke="currentColor" stroke-width="1.2"/>
+          <g font-size="14" font-weight="600" fill="currentColor">
+            <text x="160" y="56">You plan the release</text>
+            <text x="480" y="56" fill="var(--judge)">The factory builds it</text>
+            <text x="800" y="56">You test it in staging</text>
+          </g>
+          <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">
+            <text x="160" y="76">PRD · MISSION.md · tickets</text>
+            <text x="480" y="76">one lap per ticket, CI-checked</text>
+            <text x="800" y="76">a human step, outside the kit</text>
+          </g>
+          <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">
+            <text x="320" y="54">tickets</text>
+            <text x="640" y="54">merged</text>
+            <text x="480" y="166">what you find becomes the next tickets</text>
+          </g>
+        </g>
+        <g fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar2)">
+          <path d="M280 66 H358"/>
+          <path d="M600 66 H678"/>
+          <path d="M800 96 V150 H160 V98"/>
+        </g>
+      </svg>
+    </div>
+    <figcaption>The release loop. This kit is the middle box: rules the agent works under, a lap it follows, and a judge it is not allowed to edit. Planning is interactive with BMAD, and deploying to staging stays with a human, because the factory rules treat deployment as irreversible.</figcaption>
+  </figure>
+
+  <h2 style="margin-bottom: -24px">Inside the factory: the happy lap</h2>
+
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 -28 1250 308" role="img" aria-label="The happy lap of one ticket, in two columns, Plan and Lap: you plan the release and start a lap; the agent builds and reviews, runs the local check and the acceptance check, and opens a pull request; the local CI check is all green; you review and merge.">
+        <defs>
+          <marker id="arH" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker>
+          <marker id="arHG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--green)"/></marker>
+        </defs>
+        <g fill="var(--lane)">
+          <rect x="4" y="12" width="1242" height="80" rx="6"/>
+          <rect x="4" y="100" width="1242" height="80" rx="6"/>
+          <rect x="4" y="188" width="1242" height="80" rx="6"/>
+        </g>
+        <g stroke="var(--line)" stroke-width="1" stroke-dasharray="3 4">
+          <line x1="238" y1="-24" x2="238" y2="268"/>
+        </g>
+        <g font-family="IBM Plex Mono, monospace" font-size="11" font-weight="500" letter-spacing="1" fill="var(--muted)" text-anchor="middle">
+          <text x="166" y="-6">PLAN</text>
+          <text x="742" y="-6">LAP</text>
+        </g>
+        <g font-family="IBM Plex Mono, monospace" font-size="11" font-weight="500" letter-spacing="1" fill="var(--muted)">
+          <text x="16" y="56">HUMAN</text>
+          <text x="16" y="144">AGENT</text>
+          <text x="16" y="232" fill="var(--judge)">JUDGE</text>
+        </g>
+        <g stroke="currentColor" stroke-width="1.2" fill="var(--surface)">
+          <rect x="104" y="30" width="124" height="44" rx="5"/>
+          <rect x="248" y="30" width="124" height="44" rx="5"/>
+          <rect x="392" y="118" width="124" height="44" rx="5"/>
+          <rect x="536" y="118" width="124" height="44" rx="5"/>
+          <rect x="680" y="118" width="124" height="44" rx="5"/>
+          <rect x="824" y="118" width="124" height="44" rx="5"/>
+          <rect x="1112" y="30" width="124" height="44" rx="5"/>
+        </g>
+        <rect x="968" y="206" width="124" height="44" rx="5" fill="var(--surface)" stroke="var(--judge)" stroke-width="1.6"/>
+        <g font-family="IBM Plex Sans, sans-serif" text-anchor="middle" font-size="12.5" font-weight="600" fill="currentColor">
+          <text x="166" y="49">Plan the release</text>
+          <text x="310" y="49">Run a lap</text>
+          <text x="454" y="137">Build + review</text>
+          <text x="598" y="137">Local check</text>
+          <text x="742" y="137">Acceptance check</text>
+          <text x="886" y="137">Open PR</text>
+          <text x="1030" y="225" fill="var(--judge)">Local CI check</text>
+          <text x="1174" y="49">Review + merge</text>
+        </g>
+        <g font-family="IBM Plex Mono, monospace" font-size="10" text-anchor="middle" fill="var(--muted)">
+          <text x="166" y="66">with BMAD</text>
+          <text x="310" y="66">you start it</text>
+          <text x="454" y="154">plan, code, review</text>
+          <text x="598" y="154">build, tests, app</text>
+          <text x="742" y="154">another agent tests</text>
+          <text x="886" y="154">push the branch</text>
+          <text x="1030" y="242">three checks</text>
+          <text x="1174" y="66">you decide</text>
+        </g>
+        <g fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#arH)">
+          <path d="M228 52 H246"/>
+          <path d="M372 52 H382 V140 H390"/>
+          <path d="M516 140 H534"/>
+          <path d="M660 140 H678"/>
+          <path d="M804 140 H822"/>
+          <path d="M948 140 H958 V228 H966"/>
+        </g>
+        <path d="M1092 228 H1102 V52 H1110" fill="none" stroke="var(--green)" stroke-width="1.5" marker-end="url(#arHG)"/>
+        <g fill="currentColor">
+          <rect x="240" y="22" width="30" height="15" rx="7.5"/>
+          <rect x="384" y="110" width="16" height="15" rx="7.5"/>
+          <rect x="528" y="110" width="22" height="15" rx="7.5"/>
+          <rect x="672" y="110" width="22" height="15" rx="7.5"/>
+          <rect x="816" y="110" width="30" height="15" rx="7.5"/>
+          <rect x="960" y="198" width="22" height="15" rx="7.5"/>
+        </g>
+        <g font-family="IBM Plex Mono, monospace" font-size="9.5" font-weight="500" fill="var(--surface)" text-anchor="middle">
+          <text x="255" y="33">1–3</text>
+          <text x="392" y="121">6</text>
+          <text x="539" y="121">7a</text>
+          <text x="683" y="121">7b</text>
+          <text x="831" y="121">8–9</text>
+          <text x="971" y="209">10</text>
+        </g>
+        <text x="1108" y="150" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--green)" text-anchor="end">all green</text>
+      </svg>
+    </div>
+  </figure>
+
+  <h2 style="margin-bottom: -24px">Every stop and loop</h2>
+
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 1200 600" role="img" aria-label="Swimlane diagram of a factory lap. Planning produces the mission and tickets; a lap branches, builds with bmad-build, runs local gates, has another agent test the app against the ticket's acceptance criteria, and opens a pull request; the lap runs the factory judge on its pull request, which runs the local CI check; every fix takes a round from a budget of three; red checks go back to the agent as fix rounds, green checks go to a human who merges; calibration checks the judge itself.">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker>
+          <marker id="arR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--red)"/></marker>
+          <marker id="arG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--green)"/></marker>
+          <marker id="arJ" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--judge)"/></marker>
+        </defs>
+
+        <!-- lanes -->
+        <g fill="var(--lane)">
+          <rect x="4" y="16" width="1192" height="128" rx="6"/>
+          <rect x="4" y="152" width="1192" height="172" rx="6"/>
+          <rect x="4" y="332" width="1192" height="136" rx="6"/>
+          <rect x="4" y="476" width="1192" height="108" rx="6"/>
+        </g>
+        <g font-family="IBM Plex Mono, monospace" font-size="11" font-weight="500" letter-spacing="1" fill="var(--muted)">
+          <text x="16" y="38">HUMAN</text>
+          <text x="16" y="174">AGENT</text>
+          <text x="16" y="354" fill="var(--judge)">JUDGE</text>
+          <text x="16" y="498">AROUND</text>
+        </g>
+
+        <!-- nodes -->
+        <g font-family="IBM Plex Sans, sans-serif" text-anchor="middle">
+          <g stroke="currentColor" stroke-width="1.2" fill="var(--surface)">
+            <rect x="116" y="58" width="150" height="44" rx="5"/>
+            <rect x="300" y="58" width="140" height="44" rx="5"/>
+            <rect x="840" y="58" width="160" height="44" rx="5"/>
+            <rect x="1030" y="58" width="150" height="44" rx="5"/>
+
+            <rect x="116" y="170" width="150" height="44" rx="5"/>
+            <rect x="116" y="262" width="150" height="44" rx="5"/>
+            <rect x="300" y="170" width="140" height="44" rx="5"/>
+            <rect x="470" y="170" width="160" height="44" rx="5"/>
+            <rect x="470" y="262" width="160" height="44" rx="5"/>
+            <rect x="660" y="262" width="140" height="44" rx="5"/>
+            <rect x="1030" y="170" width="90" height="44" rx="5"/>
+            <rect x="840" y="262" width="160" height="44" rx="5"/>
+
+            <rect x="116" y="494" width="324" height="74" rx="5"/>
+            <rect x="470" y="494" width="330" height="74" rx="5"/>
+          </g>
+          <rect x="300" y="262" width="140" height="44" rx="5" fill="var(--surface)" stroke="var(--red)" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <rect x="660" y="58" width="140" height="44" rx="5" fill="var(--surface)" stroke="var(--red)" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <rect x="470" y="58" width="160" height="44" rx="5" fill="var(--surface)" stroke="var(--red)" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <text x="550" y="77" font-size="12.5" font-weight="600" fill="var(--red)">Your decision</text>
+          <text x="550" y="94" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">rewrite or do it</text>
+          <rect x="840" y="494" width="160" height="74" rx="5" fill="var(--surface)" stroke="var(--judge)" stroke-width="1.2"/>
+
+          <!-- CI checks -->
+          <rect x="840" y="344" width="160" height="114" rx="6" fill="var(--surface)" stroke="var(--judge)" stroke-width="1.6"/>
+          <text x="920" y="376" font-size="13" font-weight="600" fill="var(--judge)">Local CI check</text>
+          <g font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" text-anchor="start">
+            <text x="852" y="402">• build, tests, app runs</text>
+            <text x="852" y="420">• factory files untouched</text>
+            <text x="852" y="438">• no risky change</text>
+          </g>
+
+
+          <g font-size="12.5" font-weight="600" fill="currentColor">
+            <text x="191" y="77">Write MISSION.md</text>
+            <text x="370" y="85">Say “run a lap”</text>
+            <text x="730" y="77" fill="var(--red)">Lap stops</text>
+            <text x="920" y="77">Add a label</text>
+            <text x="1105" y="85">Review + merge</text>
+
+            <text x="191" y="189">Write the PRD</text>
+            <text x="191" y="281">Slice tickets</text>
+            <text x="370" y="189">Branch</text>
+            <text x="370" y="281" fill="var(--red)">Stop, mark blocked</text>
+            <text x="550" y="189">bmad-build</text>
+            <text x="550" y="281">Local check</text>
+            <text x="730" y="281">Acceptance check</text>
+            <text x="920" y="289">Push, open PR</text>
+            <text x="1075" y="197">Mark done</text>
+
+            <text x="132" y="515" text-anchor="start">Dispatcher (optional)</text>
+            <text x="486" y="515" text-anchor="start">Board</text>
+            <text x="856" y="515" text-anchor="start" fill="var(--judge)">Calibrate</text>
+          </g>
+          <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">
+            <text x="191" y="94">from the PRD, by hand</text>
+            <text x="730" y="94">you grant rounds</text>
+            <text x="920" y="94">allows a guarded PR</text>
+
+            <text x="191" y="206">bmad-agent-pm</text>
+            <text x="191" y="298">architecture · PO</text>
+            <text x="370" y="206">one per ticket</text>
+            <text x="370" y="298">risky change</text>
+            <text x="550" y="206">plan → code → review</text>
+            <text x="550" y="298">build, tests, app runs</text>
+            <text x="730" y="298" font-size="10">another agent tests it</text>
+
+            <g text-anchor="start">
+              <text x="132" y="535">claims tickets, a worktree each;</text>
+              <text x="132" y="551">and routes red checks back</text>
+              <text x="486" y="535">live board: serve.py on your machine</text>
+              <text x="486" y="551">reads Git, PRs and statuses</text>
+              <text x="856" y="535">planted bugs, by hand;</text>
+              <text x="856" y="551">checks catch them</text>
+            </g>
+          </g>
+        </g>
+
+        <!-- flow arrows -->
+        <g fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#ar)">
+          <path d="M191 170 V104"/>
+          <path d="M191 214 V260"/>
+          <path d="M266 296 H288 V192 H298"/>
+          <path d="M370 102 V168"/>
+          <path d="M440 192 H468"/>
+          <path d="M550 214 V260"/>
+          <path d="M630 284 H658"/>
+          <path d="M800 284 H838"/>
+          <path d="M920 306 V342"/>
+          <path d="M1075 102 V168"/>
+        </g>
+        <path d="M370 214 V260" fill="none" stroke="var(--red)" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arR)"/>
+        <path d="M440 296 H455 V198 A6 6 0 0 0 455 186 V80 H468" fill="none" stroke="var(--red)" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#arR)"/>
+        <path d="M840 356 H820 V192 H632" fill="none" stroke="var(--red)" stroke-width="1.5" marker-end="url(#arR)"/>
+        <path d="M770 192 V104" fill="none" stroke="var(--red)" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#arR)"/>
+        <path d="M1000 452 H1160 V104" fill="none" stroke="var(--green)" stroke-width="1.5" marker-end="url(#arG)"/>
+        <path d="M1000 80 H1018 V410 H1002" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+        <path d="M920 494 V460" fill="none" stroke="var(--judge)" stroke-width="1.3" marker-end="url(#arJ)"/>
+        <path d="M730 262 V192" fill="none" stroke="var(--red)" stroke-width="1.5"/>
+
+        <!-- lap skill step badges -->
+        <g fill="currentColor">
+          <rect x="292" y="50" width="30" height="15" rx="7.5"/>
+          <rect x="292" y="162" width="16" height="15" rx="7.5"/>
+          <rect x="292" y="254" width="16" height="15" rx="7.5"/>
+          <rect x="462" y="162" width="16" height="15" rx="7.5"/>
+          <rect x="462" y="254" width="22" height="15" rx="7.5"/>
+          <rect x="652" y="254" width="22" height="15" rx="7.5"/>
+          <rect x="832" y="254" width="30" height="15" rx="7.5"/>
+          <rect x="832" y="336" width="22" height="15" rx="7.5"/>
+          <rect x="1022" y="162" width="16" height="15" rx="7.5"/>
+          <rect x="742" y="177" width="16" height="15" rx="7.5" fill="var(--red)"/>
+        </g>
+        <g font-family="IBM Plex Mono, monospace" font-size="9.5" font-weight="500" fill="var(--surface)" text-anchor="middle">
+          <text x="307" y="61">1–3</text>
+          <text x="300" y="173">4</text>
+          <text x="300" y="265">5</text>
+          <text x="470" y="173">6</text>
+          <text x="473" y="265">7a</text>
+          <text x="663" y="265">7b</text>
+          <text x="847" y="265">8–9</text>
+          <text x="843" y="347">10</text>
+          <text x="1030" y="173">C</text>
+          <text x="750" y="188">B</text>
+        </g>
+
+        <!-- arrow labels -->
+        <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">
+          <text x="814" y="250" text-anchor="end" fill="var(--red)">red</text>
+          <text x="681" y="184" text-anchor="middle" fill="var(--red)">fix, max 3</text>
+          <text x="776" y="150" fill="var(--red)">after 3</text>
+          <text x="736" y="240" fill="var(--red)">failed</text>
+          <text x="1086" y="446" fill="var(--green)">all three green</text>
+          <text x="1081" y="140">“merged”</text>
+          <text x="928" y="484" fill="var(--judge)">must go red</text>
+        </g>
+      </svg>
+    </div>
+  </figure>
+</div>
+
+</body>
+</html>
