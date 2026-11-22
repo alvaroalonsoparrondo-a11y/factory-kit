@@ -1,0 +1,37 @@
+# The kit's own CI. The workflows a project runs live in template/.github/workflows/ and do not run here.
+name: kit
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  kit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Git identity for the scratch repositories the tests make
+        run: |
+          git config --global user.name kit-ci
+          git config --global user.email kit-ci@localhost
+          git config --global init.defaultBranch main
+      - name: kit.py
+        run: python -m unittest discover -s bin -v
+      - name: The harness
+        run: |
+          for d in template/harness/*/; do
+            if ls "$d"test_*.py >/dev/null 2>&1; then
+              echo "== $d"
+              python -m unittest discover -s "$d"
+            fi
+          done
+      - name: The lap skill is the same for every agent
+        run: cmp template/.claude/skills/lap/SKILL.md template/.kiro/skills/lap/SKILL.md

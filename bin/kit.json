@@ -1,0 +1,4 @@
+{
+  "about": "The kit's phase. young: a change made in a project is kept and listed by kit.py sync. mature: it stops sync and fails doctor; every change starts as an issue in factory-kit. The kit's owner changes this, with a CHANGELOG.md entry.",
+  "phase": "young"
+}

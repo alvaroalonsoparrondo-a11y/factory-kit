@@ -1,6 +1,39 @@
 # Changelog
 
-Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
+Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
+
+## 2026-11-22 — `kit.py`: one command installs the factory, one keeps it up to date (from `factory-pilot`)
+
+Seen bringing `factory-pilot` up to the kit (factory-pilot#13, #14). 10 of 11 kit commits conflicted on cherry-pick, because a project's factory files were edited copies. The kit-only files and the fence had to be sorted out by hand. Real names had to be put back over placeholders. `RUNBOOK.md` and the two changelogs were merged by hand. 38 fenced files were staged for a human to copy. Design: [docs/superpowers/specs/2026-11-22-kit-sync-design.md](docs/superpowers/specs/2026-11-22-kit-sync-design.md) (#17), after coleam00/ai-software-factory's `template/` and `init`.
+
+- **Layout:** the files the kit owns moved to `template/`, at the path a project has them. The files a project starts with and then owns moved to `seed/`:
+  - `MISSION.md`;
+  - `README.md` (was `PROJECT_README.md`);
+  - the new `PROJECT_NOTES.md`;
+  - `.github/CODEOWNERS`;
+  - `.claude/launch.json`.
+
+  The fenced settings left `fence/` for their real paths in `template/`. `init-project.sh` and `skills-lock.json` are gone; `skills-lock.json` is each project's own, written by BMAD.
+- **`bin/kit.py`** (standard library), with 23 tests in `bin/test_kit.py`:
+  - **`init --owner`** installs the factory in an empty repository and fills in the seeds' names.
+  - **`status`** shows the kit commits a project lacks and the files it changed.
+  - **`sync`** takes an update on a branch `factory/sync-<rev>`:
+    - a file only the kit changed is replaced;
+    - a file both sides changed goes to whichever change reached `main` later;
+    - a file only the project changed is kept and listed while the kit is young;
+    - the fence's deny lists are merged, so a project may add its own rules;
+    - `.gitignore` lines are appended.
+
+    It commits nothing and writes a pull request body. `--adopt <rev>` is the first sync of a project made before `kit.py`; `--discard <file>` takes the kit's version.
+  - **`doctor`** checks that the fence denies every protected path and that the two lap skills match, and warns when `CODEOWNERS` misses a path.
+- **`kit.lock.json`** in each project records the kit revision, a hash of each kit file (line endings normalised), and the kit's fence entries. It is now a protected path in all five places.
+- **`bin/kit.json`** holds the kit's phase, `young` for now. Once `mature`, a change made in a project stops `sync` and fails `doctor`: every change then starts as an issue here.
+- **No placeholders in the kit's files.** `RUNBOOK.md` uses "this repository", `gh browse` and `gh api repos/{owner}/{repo}`. Only the seeds keep `__OWNER__`, `__PROJECT__` and `__HOST__`, which `init` fills.
+- **Documents:** `template/MODIFYING.md` describes the new flow, issue first. `template/RUNBOOK.md` setup uses `kit.py init` and points to `PROJECT_NOTES.md`. `AGENT_SETUP.md` starts from an empty repository and a kit clone. `README.md` describes the folders.
+- **The kit's own agent files:** a root `AGENTS.md` (with `CLAUDE.md` importing it) is for agents changing the kit. It says everything in `template/` and `seed/` is product, not instructions. The root settings exclude those folders from `CLAUDE.md` loading (`claudeMdExcludes`) and deny the `lap` skill, which Claude Code would otherwise load from `template/.claude/skills/` once an agent touches files there.
+- **CI:** the kit runs `.github/workflows/kit.yml`, with the `kit.py` tests, the harness tests and the lap-skill check. Its old workflows are now `template/.github/workflows/` and run only in projects.
+
+Tested on Windows: `kit.py` 23 tests; harness tests board 73, dispatch 53 (1 skipped), judge 53, runtime 15. Not tested yet: `sync --adopt` on `factory-pilot` itself (its own pull request, the acceptance test); `kit.yml` on GitHub; whether `claudeMdExcludes` and the `Skill(template:lap)` deny keep the lap's rules away in a real session. The guards' `skip_template` stays for now, harmless once the kit is no longer a template repository.
 
 ## 2026-11-22 — The judge runs the gates with Git's bash on Windows (from `factory-pilot`, #12)
 

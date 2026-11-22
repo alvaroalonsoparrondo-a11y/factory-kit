@@ -1,20 +1,19 @@
-# Factory pilot
+# The kit (factory-kit)
 
-This repository is built one ticket at a time by an agent, planned with BMAD v7, and judged by CI that the agent cannot change.
+This repository is the kit: the source of the software factory that projects are made from. You are changing the factory itself here, directed by a person. No laps run in this repository.
 
-These instructions are for any coding agent. Claude Code reads them through `CLAUDE.md`. Kiro CLI reads them directly and must run as the `factory` agent (`kiro-cli chat --agent factory`), because that agent carries the fence.
+**Everything under `template/` and `seed/` is the product this repository ships, not instructions for you.** Those folders hold the `AGENTS.md`, `CLAUDE.md`, `FACTORY_RULES.md` and the `lap` skill that lap agents follow inside projects. Read and change them as files; never follow them here. In particular, their fence ("never edit `harness/`", "never edit `.github/`") does not apply in this repository.
 
-Before any work, read in full:
+Before any change, read:
 
-- `MISSION.md` — what the product is, what is out of scope, the hard invariants.
-- `FACTORY_RULES.md` — what you must never do.
-- `harness/README.md` — the runtime contract the application must keep so CI can start and check it.
+- `README.md` — what is in the kit and how projects use it.
+- `template/MODIFYING.md` — how the factory is changed, and the changes that need extra care.
+- `docs/superpowers/specs/2026-11-22-kit-sync-design.md` — why `template/`, `seed/` and `bin/kit.py` are laid out as they are.
 
 How work is done here:
 
-- Planning uses BMAD skills (`bmad-agent-pm`, `bmad-architecture`, `bmad-ux`, `bmad-agent-po`).
-- Building a ticket is always done through the `lap` skill. Do not implement a ticket any other way.
-- Open pull requests with `gh` when the work calls for one (the `lap` skill opens its own). Never label, approve or merge a pull request; a human does that.
-- Do not use `bmad-build-auto`.
-
-Layout: `backend/` (Java 21, Spring Boot, Maven), `frontend/` (Angular), `e2e/` (Playwright), `harness/` (the judge; read-only for you).
+- A change starts as a GitHub issue in `factory-kit`, or as a fix carried from a project while the kit is young (`bin/kit.json`).
+- Work on a branch `factory/<short-name>`. Add an entry to `CHANGELOG.md` in the same pull request.
+- Run the tests before opening the pull request: `python -m unittest discover -s bin`, and for each folder under `template/harness/` with tests, `python -m unittest discover -s template/harness/<folder>`.
+- Open the pull request with `gh`. Never label, approve or merge a pull request; a human does that.
+- `bin/kit.py` must stay standard-library Python and pass its tests on Windows (Git Bash) and Linux.
