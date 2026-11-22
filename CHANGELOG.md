@@ -2,6 +2,16 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [MODIFYING.md](MODIFYING.md).
 
+## 2026-11-22 — The judge runs the gates with Git's bash on Windows (from `factory-pilot`, #12)
+
+Seen validating the update from the kit in `factory-pilot`, on Windows 11 with Git for Windows. The judge started the gates as `bash`, and Windows finds a program started by name in System32 before it searches PATH. So it ran WSL's `bash.exe`, which exits 1 when no Linux distribution is installed. Every `gates` result was red. `classify.py` called that red `introduced`, so it would also have cost the lap a round. `shutil.which("bash")` alone does not fix it: on a usual Windows PATH, System32 comes before Git, and Git's installer often adds only `Git\cmd`, which has no bash.
+
+- **`judge.py`:** new `find_bash()` skips the WSL and Microsoft Store stand-ins and falls back to the bash that ships with Git (found from `git` on PATH). With no bash at all, the gate log says `bash: command not found`, which `classify.py` already counts as the machine's.
+- **`classify.py`:** the WSL "no installed distributions" message is a machine failure (`tool`).
+- **`test_lap_round.py`:** runs `sys.executable`, not `python3`, which on Windows is often only the Store stand-in.
+
+Tested on Windows: judge tests 53 (4 new), board 73 and dispatch 53 (1 skipped) all pass. Before the change, 3 failed. With a PATH of System32 and `Git\cmd` only, `which("bash")` finds WSL's and `find_bash()` finds Git's. Not tested on Linux; the change there is `which("bash")`, which finds the same bash as before.
+
 ## 2026-11-21 — Runtime verification: another agent checks the running app
 
 Seen in planning topic 2: the gates prove that the tests the builder wrote pass, and Playwright's journeys are written by the same agent that builds the ticket. Nothing independent asked whether the running app does what the ticket says.

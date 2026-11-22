@@ -192,7 +192,9 @@ class ClassifyTests(unittest.TestCase):
                            ("Web server failed to start. Port 8190 was already in use.", "port"),
                            ("bash: mvn: command not found", "tool"),
                            ("write error: No space left on device", "disk"),
-                           ("Failed to download Chromium 120", "browser")):
+                           ("Failed to download Chromium 120", "browser"),
+                           ("Windows Subsystem for Linux has no installed distributions.", "tool"),
+                           ("bash: command not found. The judge needs bash; on Windows, Git for Windows.", "tool")):
             cause, evidence = classify.classify(f"== Gate 1\n{line}\nmore\n")
             self.assertEqual(cause, "environment", line)
             self.assertTrue(evidence.startswith(kind), evidence)
@@ -208,6 +210,43 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(classify.classify("Failures: 1", main_red=False)[0], "introduced")
         self.assertEqual(classify.classify("x\n" + classify.TIMEOUT + " in 30 minutes.")[0], "timeout")
         self.assertEqual(classify.classify("bash: npm: command not found", main_red=True)[0], "environment")
+
+
+class FindBashTests(unittest.TestCase):
+    """The gate's bash on Windows is never WSL's or the Store's stand-in (factory-kit#12)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def file(self, rel):
+        path = self.tmp / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("")
+        return str(path)
+
+    @unittest.skipUnless(os.name == "nt", "the Windows search order")
+    def test_wsl_bash_on_path_is_skipped_for_gits_bash(self):
+        wsl = self.file("Windows/System32/bash.exe")
+        git = self.file("Git/cmd/git.exe")
+        gits = self.file("Git/usr/bin/bash.exe")
+        found = j.find_bash(lambda name: {"bash": wsl, "git": git}[name])
+        self.assertEqual(Path(found), Path(gits).resolve())
+
+    @unittest.skipUnless(os.name == "nt", "the Windows search order")
+    def test_git_bash_first_on_path_is_used(self):
+        gits = self.file("Git/usr/bin/bash.exe")
+        self.assertEqual(j.find_bash(lambda name: gits if name == "bash" else None), gits)
+
+    @unittest.skipUnless(os.name == "nt", "the Windows search order")
+    def test_only_stand_ins_means_no_bash(self):
+        store = self.file("Users/me/AppData/Local/Microsoft/WindowsApps/bash.exe")
+        self.assertIsNone(j.find_bash(lambda name: store if name == "bash" else None))
+
+    def test_the_real_bash_runs(self):
+        bash = j.find_bash()
+        self.assertIsNotNone(bash)
+        done = subprocess.run([bash, "-c", "echo ok"], capture_output=True, text=True)
+        self.assertEqual(done.stdout.strip(), "ok")
 
 
 MAIN = "f" * 40

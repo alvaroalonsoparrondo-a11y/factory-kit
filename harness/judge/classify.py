@@ -41,6 +41,7 @@ ENVIRONMENT = [
     ("port", r"Port \d+ (is|was) already in use"),
     ("tool", r"\b(java|mvn|npm|npx|node|git|bash|curl): (command )?not found\b"),
     ("tool", r"JAVA_HOME is not (defined|set) correctly"),
+    ("tool", r"Windows Subsystem for Linux has no installed distributions"),  # WSL's bash, not Git's
     ("disk", r"No space left on device"),
     ("browser", r"Failed to (download|install) (browser|chromium|Chromium)"),
     ("browser", r"Host system is missing dependencies to run browsers"),

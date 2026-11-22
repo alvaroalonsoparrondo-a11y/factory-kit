@@ -4,6 +4,7 @@ Run: python -m unittest discover -s harness/board -v
 """
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -65,7 +66,7 @@ class RoundTests(unittest.TestCase):
 
     def test_rounds_and_signals_share_one_file_and_the_board_reads_both(self):
         self.take("review", "bad plan")
-        subprocess.run(["python3", str(Path(lr.__file__).with_name("lap_signal.py")), "1.2", "working"],
+        subprocess.run([sys.executable, str(Path(lr.__file__).with_name("lap_signal.py")), "1.2", "working"],
                        cwd=self.root, capture_output=True)
         lines = (Path(self.root) / ".lap" / "1.2.jsonl").read_text().splitlines()
         self.assertEqual(json.loads(lines[0])["state"], "round")
@@ -76,7 +77,7 @@ class RoundTests(unittest.TestCase):
     def test_cli(self):
         subprocess.run(["git", "init", "-q", self.root], check=True)
         script = str(Path(lr.__file__))
-        run = lambda *a: subprocess.run(["python3", script, "1.2", *a], cwd=self.root, capture_output=True, text=True)
+        run = lambda *a: subprocess.run([sys.executable, script, "1.2", *a], cwd=self.root, capture_output=True, text=True)
         done = run("take", "gates", "red")
         self.assertEqual(done.returncode, 0)
         self.assertIn("Round 1 of 3 (gates)", done.stdout)

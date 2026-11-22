@@ -117,6 +117,32 @@ def ignore_folder(folder):
         ignore.write_text("*\n", encoding="utf-8")
 
 
+def find_bash(which=shutil.which):
+    """The bash that runs the gates, or None.
+
+    Not plain `"bash"`: on Windows, starting a program by name searches System32 before PATH and
+    finds WSL's `bash.exe`, which fails where no Linux distribution is installed. The WSL and
+    Microsoft Store stand-ins are skipped; the bash that ships with Git for Windows is the fallback,
+    since Git's installer often puts only `Git\\cmd` (no bash) on PATH.
+    """
+    if os.name != "nt":
+        return which("bash")
+    found = [which("bash")]
+    git = which("git")
+    if git:
+        for root in Path(git).resolve().parents[:3]:  # Git\cmd\git.exe or Git\mingw64\bin\git.exe
+            found += [root / "bin" / "bash.exe", root / "usr" / "bin" / "bash.exe"]
+    for candidate in found:
+        if not candidate:
+            continue
+        lower = str(candidate).lower().replace("/", "\\")
+        if "\\windows\\system32\\" in lower or "\\windowsapps\\" in lower:
+            continue
+        if Path(candidate).is_file():
+            return str(candidate)
+    return None
+
+
 class Conflict(Exception):
     """The pull request does not merge cleanly into `main`."""
 
@@ -168,10 +194,14 @@ class Workspace:
             if not all(s.is_file() for s in skills) or len({s.read_bytes() for s in skills}) != 1:
                 out.write(f"GATE FAIL: {LAP_SKILLS[1]} must be a copy of {LAP_SKILLS[0]}\n")
                 return 1, time.monotonic() - start
+            bash = find_bash()
+            if not bash:  # worded to match classify.py's missing-tool pattern: the machine, not the change
+                out.write("bash: command not found. The judge needs bash; on Windows, Git for Windows.\n")
+                return 1, time.monotonic() - start
             out.flush()
             group = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" \
                 else {"start_new_session": True}
-            proc = subprocess.Popen(["bash", "harness/run-gates.sh"], cwd=path, env=env, stdout=out,
+            proc = subprocess.Popen([bash, "harness/run-gates.sh"], cwd=path, env=env, stdout=out,
                                     stderr=subprocess.STDOUT, **group)
             try:
                 return proc.wait(timeout=timeout), time.monotonic() - start
