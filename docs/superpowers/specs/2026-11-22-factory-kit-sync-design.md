@@ -43,6 +43,10 @@ There are two phases, and the design is built for the second.
 
   Projects then do not change the files factory-kit owns at all, and `sync` only ever moves one way.
 
+**Who decides that factory-kit is mature, and what changes then.**
+- **The decision:** factory-kit's owner decides. It is recorded in `bin/factory-kit.json` (`"phase": "young"`, then `"mature"`) and in `CHANGELOG.md`. A useful sign: several laps in a row, in more than one project, needed no change to a factory file.
+- **The difference it makes:** while young, a file only the project changed is kept and listed as "not in factory-kit yet". Once mature, the same file makes `sync` stop and `doctor` fail. The message names the file and says to open an issue in factory-kit, and `--discard <file>` gives it back factory-kit's version.
+
 Because the second phase is the lasting one, carrying a change from a project to factory-kit gets no command of its own: in the first phase it is a small manual copy (see "Carrying a change to factory-kit, for now").
 
 ## Intent
@@ -59,34 +63,41 @@ Because the second phase is the lasting one, carrying a change from a project to
 
 ```
 factory-kit/
-  template/            everything a project gets, at the path it gets it
+  template/            files factory-kit owns: sync keeps them up to date, at the same path in the project
     .claude/settings.json        the fenced version (today fence/claude-settings.json)
     .kiro/agents/factory.json    the fenced version (today fence/kiro-factory.json)
     .claude/skills/lap/  .kiro/skills/lap/  .github/  harness/  _bmad/custom/
-    AGENTS.md  CLAUDE.md  FACTORY_RULES.md  RUNBOOK.md  MODIFYING.md  .gitattributes  skills-lock.json
+    AGENTS.md  CLAUDE.md  FACTORY_RULES.md  RUNBOOK.md  MODIFYING.md  .gitattributes
     .gitignore                   lines to add to the project's .gitignore
-    seed/                        project files, installed once by init, never again
-      MISSION.md  README.md (today PROJECT_README.md)  PROJECT_NOTES.md  .github/CODEOWNERS
+  seed/                files a project starts with: init copies them once, at the same path, and never again
+    MISSION.md  README.md (today PROJECT_README.md)  PROJECT_NOTES.md  .github/CODEOWNERS  .claude/launch.json
   bin/factory-kit.py           init, status, sync, doctor
-  bin/test_factory_kit.py
+  bin/factory-kit.json         factory-kit's phase: "young" or "mature" (see "How changes reach factory-kit")
+  bin/test_factory_kit.py      (Python cannot import a file name with a hyphen; the tests load factory-kit.py by path)
   .github/workflows/factory-kit.yml      factory-kit's own CI: factory-kit.py tests, then the harness tests in template/
   .claude/settings.json          factory-kit's own settings: no fence, force push denied
   CLAUDE.md                      instructions for agents changing factory-kit
   README.md  CHANGELOG.md  AGENT_SETUP.md  docs/
 ```
 
-What goes away: `fence/`, `init-project.sh`, the placeholders, and factory-kit being a GitHub template repository. The guards' `skip_template` flag is no longer needed: `template/.github/` is not read by GitHub, so factory-kit's own pull requests are judged only by `factory-kit.yml`.
+- **What goes away:** `fence/`, `init-project.sh`, the placeholders, and factory-kit being a GitHub template repository. The guards' `skip_template` flag is no longer needed: GitHub reads neither `template/.github/` nor `seed/.github/`, so factory-kit's own pull requests are judged only by `factory-kit.yml`.
+- **`.claude/launch.json`** (the live board in the desktop app's preview) is a seed: a project adds its own entries to it, such as its dev server.
+- **Two sets of agent instructions, kept apart.** factory-kit's root `CLAUDE.md` is for agents changing factory-kit. `template/CLAUDE.md`, `template/AGENTS.md` and the lap skill in `template/.claude/skills/lap/` are for lap agents in projects. When an agent reads files in a subfolder, Claude Code may also load that subfolder's `CLAUDE.md`, and possibly its skills. So an agent changing factory-kit could pick up the lap agent's rules, such as "never edit `harness/`". Two guards:
+  - factory-kit's root settings exclude `template/` from instruction loading, through Claude Code's `claudeMdExcludes` setting (to confirm when building: the setting's name and whether it also covers nested skills);
+  - the root `CLAUDE.md` says in its first lines that everything under `template/` and `seed/` is the product factory-kit ships, to be changed, never to be followed.
 
 ### The four kinds of file in a project
 
 | Kind | Files | What `sync` does |
 |---|---|---|
-| **Owned by factory-kit** | everything under `template/` except `seed/`, `.gitignore` and the two fence files | Replaces the file when factory-kit changed it. If the project changed it too, the newer change wins (see "Local changes") |
-| **Project-owned** | `MISSION.md`, `README.md`, `PROJECT_NOTES.md`, `.github/CODEOWNERS`, `docs/runtime/`, and every file not in `template/` | Never touches. `init` installs the `seed/` files once |
+| **Owned by factory-kit** | everything under `template/` except `.gitignore` and the two fence files | Replaces the file when factory-kit changed it. If the project changed it too, the newer change wins (see "Local changes") |
+| **Project-owned** | the `seed/` files (`MISSION.md`, `README.md`, `PROJECT_NOTES.md`, `.github/CODEOWNERS`, `.claude/launch.json`), `skills-lock.json`, `docs/runtime/`, and every file that is in neither `template/` nor `seed/` | Never touches. `init` copies the `seed/` files once |
 | **Fence** | `.claude/settings.json`, `.kiro/agents/factory.json` | Merges the deny lists: factory-kit's entries are added or removed, the project's own entries and every other setting stay |
 | **Merged lines** | `.gitignore` | Appends the template's lines that are missing. Never removes a line |
 
-The list of project-owned files lives in `factory-kit.py`, as `PERSONAL` does in ai-software-factory.
+- **Owning a file is not the same as being allowed to edit it.** "Project-owned" only means `sync` never touches the file. The fence still decides who may edit it: `MISSION.md` and `.github/CODEOWNERS` are project-owned, and a lap agent still may not edit them. Only a human does.
+- **The kinds are decided by folder:** `template/` or `seed/`. Only the exceptions (`skills-lock.json`, `docs/runtime/`, the fence files, `.gitignore`) are named in `factory-kit.py`.
+- **`skills-lock.json` is project-owned.** BMAD's own install command (`npx skills add …`) writes it in each project. If factory-kit owned it, every project would show it as a local change, and `sync` would record a BMAD version without installing it. factory-kit names the BMAD version in `RUNBOOK.md`'s install command instead (see "Not in scope").
 
 ### The fence: the project may add to it
 
@@ -131,6 +142,7 @@ A project may deny more than factory-kit does, for example a path of its own pro
 - **`revision`** is the factory-kit commit last synced. `status` prints the factory-kit commits since then, and `sync` puts them in the pull request body.
 - **`files`** holds a hash of each file factory-kit owns, as installed. Hashes are taken with line endings normalised to LF. The pilot's working tree is CRLF on Windows while factory-kit's is LF, so `.gitignore` looked different although its content was identical.
 - **`fence`** holds the deny entries factory-kit manages, so a project's own entries can be told apart.
+- **The lock is a protected path.** Otherwise a lap agent could change it to hide its own change to a factory file. Only `sync` and `init` write it, and a human runs them. It joins the protected list in all five places (see "Migration").
 
 ### Local changes: the newer change wins
 
@@ -141,10 +153,10 @@ For each file factory-kit owns, `sync` compares the project's copy (P), the lock
 | P = L, K = L | Nothing changed | Nothing |
 | P = L, K ≠ L | factory-kit changed it | Replaces it |
 | P ≠ L, K = P | The project made the change factory-kit now has (it was carried over) | Updates the lock |
-| P ≠ L, K = L | Only the project changed it | Keeps it, and lists it as "not in factory-kit yet" |
+| P ≠ L, K = L | Only the project changed it | Young: keeps it, and lists it as "not in factory-kit yet". Mature: stops (see "How changes reach factory-kit") |
 | P ≠ L, K ≠ L, K ≠ P | Both changed it | **The newer one wins** |
 
-- **Who is newer** is decided by commit time: the project's last commit to the file, against factory-kit's last commit to it after the lock's revision. `sync` refuses a dirty tree, so the project's change is always a commit.
+- **Who is newer** is decided by when each change reached `main`, not when it was written. On each side, `git log --first-parent main -1 -- <file>` gives the commit on `main` that last changed the file: the merge commit of its pull request, or the commit itself if it went straight to `main`. That commit's committer time is compared. So a fix written early but merged late counts as late. `sync` refuses a dirty tree, so the project's change is always on `main`.
 - **Nothing is lost.** The version that lost stays in Git history, and `sync` names every such file, which version won, and the commit of the version that lost. If the project's version wins, it is also listed as "not in factory-kit yet".
 - **Compared with ai-software-factory:** it compares P with K only, so it cannot tell "factory-kit changed it" from "the project changed it". It backs the file up and always lets factory-kit win. The lock makes the comparison three-way here, and lets the newer change win.
 
@@ -155,13 +167,22 @@ All run from the project's root, with factory-kit as a local clone (a sibling fo
 ```
 python ../factory-kit/bin/factory-kit.py init --owner <user>   # new project: seeds, factory-kit files, fence, lock (replaces init-project.sh)
 python ../factory-kit/bin/factory-kit.py status                # project revision vs factory-kit main, new factory-kit commits, files "not in factory-kit yet"
-python ../factory-kit/bin/factory-kit.py sync                  # factory-kit -> project, on a new branch factory/factory-kit-<short revision>
-python ../factory-kit/bin/factory-kit.py doctor                # fence covers guards.json; lap skills identical; CODEOWNERS covers the protected paths (warning)
+python ../factory-kit/bin/factory-kit.py sync                  # factory-kit -> project, on a new branch factory/sync-<short revision>
+python ../factory-kit/bin/factory-kit.py sync --adopt <rev>    # the first sync of a project made before factory-kit.py (see "Migration")
+python ../factory-kit/bin/factory-kit.py doctor                # checks the fence, the lap skills and CODEOWNERS (below)
 ```
+
+**`doctor`** checks four things:
+1. Every path in `harness/judge/guards.json`'s `protected-paths` is denied in `.claude/settings.json` and in `.kiro/agents/factory.json`. A failure here fails `doctor`.
+2. `.claude/skills/lap/SKILL.md` and `.kiro/skills/lap/SKILL.md` are identical. A failure here fails `doctor`.
+3. `.github/CODEOWNERS` covers every protected path. A gap only warns.
+4. Once factory-kit is mature: no file factory-kit owns was changed in the project. A failure here fails `doctor`.
+
+It does not read `FACTORY_RULES.md` section 2, which is prose. That one stays a person's check, as "Changes that need extra care" in `MODIFYING.md` says.
 
 **`sync`:**
 1. Refuses a dirty project tree, or a factory-kit clone with uncommitted changes or behind its `origin/main`.
-2. Creates `factory/factory-kit-<rev>` from `origin/main`.
+2. Creates `factory/sync-<rev>` from `origin/main`.
 3. Applies the tables above and writes the lock.
 4. Runs `doctor`.
 5. Writes the pull request body (new factory-kit commits, files changed, files where the project won, files not in factory-kit yet) to a file and prints its path.
@@ -186,27 +207,36 @@ The next `sync` sees P = K and only updates the lock. There is no `port` command
   - The factory-kit-to-project recipe becomes `factory-kit.py sync`.
   - The project-to-factory-kit recipe becomes the three steps above, marked as the young factory-kit phase.
   - A new first rule: a change is requested as an issue in `factory-kit`.
-  - "Changes that need extra care" stays, and `doctor` checks the fence part of the five-place list.
+  - "Changes that need extra care" stays. Of the five places that name the protected paths, `doctor` checks the two fence files against `guards.json` and warns on `CODEOWNERS`. `FACTORY_RULES.md` section 2 is still checked by a person.
 - **`AGENT_SETUP.md` and the RUNBOOK's one-time setup:** "create from the template, run `init-project.sh`" becomes "create an empty repository, clone factory-kit next to it, run `factory-kit.py init --owner <user>`". This also removes the GitHub Enterprise problem, where the template repository did not exist on the host (2026-11-20).
 
 ## Migration
 
 **factory-kit, one pull request:**
-1. `git mv` the factory files into `template/`. Move `fence/*` to their places in `template/`, `PROJECT_README.md` to `template/seed/README.md`, and `MISSION.md` and `.github/CODEOWNERS` to `template/seed/`.
+1. `git mv` the factory files into `template/`.
+   - `fence/*` go to their places in `template/`.
+   - `PROJECT_README.md` goes to `seed/README.md`.
+   - `MISSION.md`, `.github/CODEOWNERS` and `.claude/launch.json` go to `seed/` at the same paths.
+   - `skills-lock.json` leaves factory-kit. The BMAD version goes into `RUNBOOK.md`'s install command.
 2. Take the placeholders out of `RUNBOOK.md` and `MODIFYING.md` (`{owner}/{repo}` for `gh`).
-3. Add `bin/factory-kit.py`, `bin/test_factory_kit.py`, `.github/workflows/factory-kit.yml`, factory-kit's root `CLAUDE.md` and settings.
-4. Delete `init-project.sh` and `fence/`. Untick "Template repository".
+3. Add `factory-kit.lock.json` to the protected paths, in all five places: `FACTORY_RULES.md` section 2, the two fence files, `seed/.github/CODEOWNERS` and `guards.json`.
+4. Add `bin/factory-kit.py`, `bin/factory-kit.json` (`"phase": "young"`), `bin/test_factory_kit.py`, `.github/workflows/factory-kit.yml`, factory-kit's root `CLAUDE.md` and settings.
+5. Delete `init-project.sh` and `fence/`. Untick "Template repository".
 
 **Pilot, one pull request**, the acceptance test:
 1. Add `PROJECT_NOTES.md` with the pilot's sections from `RUNBOOK.md`.
 2. Delete the pilot's `CHANGELOG.md`. Its factory findings are already in factory-kit's changelog, "(from `factory-pilot`)", and its history stays in Git.
-3. A human runs `factory-kit.py sync --adopt` (the first sync has no lock). It must:
-   - change only `RUNBOOK.md`, back to factory-kit's text;
-   - leave the fence files as they are (they already hold every factory-kit entry), `CODEOWNERS` and `MISSION.md` untouched;
+3. Add `factory-kit.lock.json` to the pilot's `CODEOWNERS` by hand.
+4. A human runs `factory-kit.py sync --adopt 6dc58fa`, the factory-kit revision the pilot was last brought up to (factory-pilot#14). It must:
+   - replace the files the migration changed, such as `RUNBOOK.md` and `MODIFYING.md`, with factory-kit's new text. For `RUNBOOK.md`, the PR body says that both sides changed it and factory-kit's version won, because the migration reached `main` after factory-pilot#14;
+   - add `Edit(/factory-kit.lock.json)` to the fence files, and change nothing else in them;
+   - leave `CODEOWNERS`, `MISSION.md`, `.claude/launch.json` and `skills-lock.json` untouched;
    - write the lock.
-4. Then a second `factory-kit.py sync` must report "nothing to do".
+5. Then a second `factory-kit.py sync` must report "nothing to do".
 
-`--adopt` takes a file as installed when it equals factory-kit's version, and lists every other one for the human. For the pilot that list is `RUNBOOK.md` only: the other four of the five files are now project-owned or fence.
+**What `--adopt <rev>` does.** The first sync has no lock, so it cannot tell which files the project changed. `--adopt <rev>` builds the missing lock from the factory-kit revision the project matches, then syncs as usual.
+- **The lock it builds:** each file's hash is taken from `<rev>`. That is `template/<path>` in `<rev>`, or `<path>` if `<rev>` is older than `template/`, which works because the migration only moves files. The fence entries are the deny list of `<rev>`'s fence files.
+- **Without the revision** it cannot work: comparing against factory-kit's new version would count every file the migration changed as a change made by the project.
 
 ## Tests (`bin/test_factory_kit.py`)
 
@@ -219,13 +249,16 @@ Each test runs against scratch Git repositories:
 - `.gitignore` lines are appended once, never removed;
 - CRLF and LF copies hash the same;
 - `sync` refuses a dirty tree or a stale factory-kit clone;
-- a no-op `sync` changes nothing.
+- a no-op `sync` changes nothing;
+- `--adopt <rev>` from a revision older than `template/` builds the same lock a normal `init` at that revision would have;
+- the newer-wins rule uses the time a change reached `main`: a branch commit written before factory-kit's change but merged after it wins;
+- in the mature phase, a file only the project changed stops `sync` and fails `doctor`, and `--discard` restores factory-kit's version.
 
 They must pass on Windows (Git Bash) and Linux, given factory-kit#12.
 
 ## Not in scope
 
-- **Pinning BMAD.** It stays in `skills-lock.json`, which becomes a file factory-kit owns. An upgrade is tried in one project, then made in factory-kit.
+- **Installing BMAD.** `sync` does not install or upgrade BMAD. factory-kit names the version in `RUNBOOK.md`'s install command; a project runs that command, and BMAD writes the project's own `skills-lock.json`. An upgrade is tried in one project, then the version is changed in factory-kit.
 - **Changing the judge, the fence's rules, the labels, or who merges.**
 - **Several factory-kits, or a project choosing parts of factory-kit.**
 
