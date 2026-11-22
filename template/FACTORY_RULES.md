@@ -19,7 +19,7 @@ This rule applies in projects made from the kit. It does not apply in `factory-k
 
 The agent never creates, edits, moves or deletes these paths:
 
-- `MISSION.md`, `FACTORY_RULES.md`, `AGENTS.md`, `CLAUDE.md`
+- `MISSION.md`, `FACTORY_RULES.md`, `AGENTS.md`, `CLAUDE.md`, `kit.lock.json`
 - `harness/`
 - `.github/`
 - `.claude/settings.json`, `.claude/skills/lap/`

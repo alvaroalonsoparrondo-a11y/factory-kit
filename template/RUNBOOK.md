@@ -2,11 +2,13 @@
 
 How to set up this project and run laps. To change the factory itself, see [MODIFYING.md](MODIFYING.md).
 
+Notes that belong to this project only (who runs it, its setup status, what it does not prove) are in [PROJECT_NOTES.md](PROJECT_NOTES.md). This file comes from the kit (`factory-kit`) and is replaced when the project takes an update.
+
 You drive the factory by hand at three points: you start each lap, you merge the pull request the lap opens, and you paste red checks back. The agent uses `gh` only to open a lap's pull request; it never labels, approves or merges one.
 
 ## One-time setup
 
-1. **Fill in the placeholders** (only if `init-project.sh` is still in this folder): `bash init-project.sh __OWNER__ __PROJECT__`, then commit and push. On GitHub Enterprise, add the host as a third value: `bash init-project.sh __OWNER__ __PROJECT__ github.example.com`.
+1. **Install the factory** (only for a new project; skip it if `kit.lock.json` exists). Create an empty repository on GitHub (or GitHub Enterprise) and clone it. Clone `factory-kit` into the same parent folder. Then, from this project's root, run `python ../factory-kit/bin/kit.py init --owner <user or team>`, and commit and push what it wrote.
 2. **Install BMAD v7** in this folder (needs Node and `uv`):
 
    ```bash
@@ -17,14 +19,14 @@ You drive the factory by hand at three points: you start each lap, you merge the
    npx -y skills add bmad-code-org/BMAD-METHOD/skills/method --skill '*' -a claude-code -a kiro-cli -y
    ```
 
-   Then, in an agent session here, say `bmad setup`. Commit what it created (`.claude/skills/`, `.kiro/skills/`, `_bmad/`). Drop `-a kiro-cli` if nobody will use Kiro, or `-a claude-code` if nobody will use Claude Code.
+   Then, in an agent session here, say `bmad setup`. Commit what it created (`.claude/skills/`, `.kiro/skills/`, `_bmad/`). Drop `-a kiro-cli` if nobody will use Kiro, or `-a claude-code` if nobody will use Claude Code. The kit was last tested with the BMAD version `bmad setup` reports as `6.13.0-next`; BMAD itself records what it installed in `skills-lock.json`, which is this project's file, not the kit's.
 3. **Check the settings.** `.claude/settings.json` (Claude Code) and `.kiro/agents/factory.json` (Kiro) must exist and parse. Their deny rules are the fence: they stop the agent from editing `MISSION.md`, `FACTORY_RULES.md`, `AGENTS.md`, `CLAUDE.md`, `harness/`, `.github/`, either agent's settings, the `lap` skill and `_bmad/custom/`, and from force-pushing.
-4. **Create three labels** in `__PROJECT__`: `human-judge-change`, `human-approved-irreversible` and `human-granted-round` (the factory judge's way to give a lap one more round; see "The round budget").
-5. **Protect `main`** in `__PROJECT__` (Settings → Branches): require a pull request, and require these status checks: `gates`, `protected-paths`, `scope-guard`. A check can only be selected after it has run once, so open a first small pull request (for example, the filled-in `MISSION.md`, with the `human-judge-change` label) and then add the checks.
+4. **Create three labels** in this repository: `human-judge-change`, `human-approved-irreversible` and `human-granted-round` (the factory judge's way to give a lap one more round; see "The round budget").
+5. **Protect `main`** in this repository (Settings → Branches): require a pull request, and require these status checks: `gates`, `protected-paths`, `scope-guard`. A check can only be selected after it has run once, so open a first small pull request (for example, the filled-in `MISSION.md`, with the `human-judge-change` label) and then add the checks.
    - Approvals: 1, by someone other than the person who ran the lap. On a one-person trial: 0, because GitHub does not let you approve your own pull request.
    - On a free GitHub plan, branch protection is not enforced on private repositories. The checks still run and show red or green; you have to respect them yourself.
    - Where GitHub Actions is not allowed (see "Without GitHub Actions" below), start the factory judge first; the three checks then report as commit statuses. Without the judge, require the pull request but not the checks: they would never report, so no pull request could merge except by an admin bypassing the rule.
-6. **Link the kit**, so factory changes can travel: `git remote add kit https://__HOST__/__OWNER__/factory-kit.git`. If the kit exists only as a local clone, give its folder instead: `git remote add kit <path to factory-kit>`.
+6. **Keep the factory up to date.** `python ../factory-kit/bin/kit.py status` shows which kit changes this project does not have yet. To take them, see "Taking an update from the kit" in [MODIFYING.md](MODIFYING.md).
 
 ## Plan the product (BMAD, interactive, in this folder)
 
@@ -64,7 +66,7 @@ To keep working in this folder while a big lap runs, start the lap in a Claude C
 
 `harness/dispatch/dispatch.py` is the factory's queue and orchestrator. It is a local script: it cannot receive webhooks, so it polls. Each pass reads the tickets the way the live board does (Git, GitHub, every worktree, lap signals, quiet time) and then:
 
-- **claims** each ready ticket once, by creating `story/<ref>` on GitHub (if the branch already exists, someone else has the ticket and it is skipped), and checks it out in its own worktree, `<parent>/__PROJECT__-wt/story-<ref>`, with its own gate port (8091, 8092, …);
+- **claims** each ready ticket once, by creating `story/<ref>` on GitHub (if the branch already exists, someone else has the ticket and it is skipped), and checks it out in its own worktree, `<project>-wt/story-<ref>`, next to this clone, with its own gate port (8091, 8092, …);
 - **starts** the lap there, headless (`claude -p "lap <ref>"`), or, with `--no-agents`, tells you to start it;
 - **routes** what happens next: a red `gates` gets a fix round with the check's output, a pull request behind `main` gets a "main moved" round, a red guard and a green pull request go to you;
 - **closes** a merged lap: marks the ticket done on `main` (as the lap's section C does), pulls `main` in the main checkout if it is clean and on `main`, removes the worktree, and writes a lap report line.
@@ -123,7 +125,7 @@ done_when = "file:harness/skeleton.lock"
 
 The board is one page with a row per ticket: its stage, its status, what it needs from you, and how often it was reviewed. Open `BOARD.md` on the `board` branch:
 
-`https://__HOST__/__OWNER__/__PROJECT__/blob/board/BOARD.md`
+`gh browse BOARD.md --branch board`
 
 - The `board` workflow rebuilds it on every push to `main` or a `story/` branch, on every pull request change, and when a check finishes. To rebuild by hand, run the `board` workflow from the Actions tab.
 - It is built from Git, GitHub and the BMAD files. It stores nothing itself, and the lap agent cannot write to it.
@@ -185,7 +187,7 @@ The gates prove that the tests the builder wrote pass. Runtime verification asks
 
 ## Without GitHub Actions
 
-Some organisations' GitHub (often GitHub Enterprise) does not allow Actions. Check with `gh api repos/__OWNER__/__PROJECT__/actions/permissions`: `"enabled": false` means no workflow runs. Do not switch Actions on without your organisation's approval. Then the **factory judge** stands in for the workflows:
+Some organisations' GitHub (often GitHub Enterprise) does not allow Actions. Check with `gh api repos/{owner}/{repo}/actions/permissions`: `"enabled": false` means no workflow runs. Do not switch Actions on without your organisation's approval. Then the **factory judge** stands in for the workflows:
 
 **When you run laps yourself** ("run a lap"), you type nothing extra. After the lap opens its pull request, it runs the judge on it (lap step A10):
 

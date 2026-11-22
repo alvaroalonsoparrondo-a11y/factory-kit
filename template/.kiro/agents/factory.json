@@ -16,6 +16,7 @@
           "FACTORY_RULES.md",
           "AGENTS.md",
           "CLAUDE.md",
+          "kit.lock.json",
           "harness/**",
           ".github/**",
           ".claude/settings.json",

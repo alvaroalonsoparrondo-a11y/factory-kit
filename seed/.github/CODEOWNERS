@@ -1,9 +1,10 @@
 # The judge and the constitution belong to named humans.
-# Set by init-project.sh: the GitHub user or team that approves changes to these paths.
+# Written once by kit.py init. From then on it is this project's file: keep it in step with the protected paths (kit.py doctor warns).
 /MISSION.md                 @__OWNER__
 /FACTORY_RULES.md           @__OWNER__
 /AGENTS.md                  @__OWNER__
 /CLAUDE.md                  @__OWNER__
+/kit.lock.json              @__OWNER__
 /harness/                   @__OWNER__
 /.github/                   @__OWNER__
 /.claude/settings.json      @__OWNER__

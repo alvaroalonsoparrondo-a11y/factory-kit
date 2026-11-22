@@ -2,38 +2,48 @@
 
 A reusable software factory for BMAD v7: an agent builds one ticket per lap, and a judge the agent cannot change decides whether it merges.
 
-This repository is a **template**. It holds only the factory, no product.
+This repository is **the kit**. It holds only the factory, no product. Its tool `bin/kit.py` installs the factory into a project and keeps it up to date.
 
 | Document | Read it when |
 |---|---|
-| [RUNBOOK.md](RUNBOOK.md) | You start a new project from this kit, or run laps in one |
+| [template/RUNBOOK.md](template/RUNBOOK.md) | You start a new project from this kit, or run laps in one |
 | [AGENT_SETUP.md](AGENT_SETUP.md) | You are an agent setting up a new project (or you want to see what it will do) |
-| [MODIFYING.md](MODIFYING.md) | You want to change the factory itself |
+| [template/MODIFYING.md](template/MODIFYING.md) | You want to change the factory, or take an update into a project |
 | [CHANGELOG.md](CHANGELOG.md) | You want to know what changed in the kit and why |
-| [FACTORY_RULES.md](FACTORY_RULES.md) | You want the rules the agent works under |
-| [harness/README.md](harness/README.md) | You want the contract an application must keep so it can be judged |
+| [template/FACTORY_RULES.md](template/FACTORY_RULES.md) | You want the rules the agent works under |
+| [template/harness/README.md](template/harness/README.md) | You want the contract an application must keep so it can be judged |
+| [The design](docs/superpowers/specs/2026-11-22-kit-sync-design.md) | You want to know why the kit is laid out this way |
 
 ## What is in the kit
 
-| Part | Files | Tied to |
+| Folder | What it is | What `kit.py` does with it |
 |---|---|---|
-| Constitution and rules | `MISSION.md` (template), `FACTORY_RULES.md` | nothing |
-| The judge | `harness/`, `.github/workflows/` | Spring + Angular + Playwright; GitHub Actions |
-| BMAD rules | `_bmad/custom/`, `skills-lock.json` | BMAD v7 |
-| Agent set-up | `AGENTS.md` (the instructions), `CLAUDE.md` (imports `AGENTS.md`), `.claude/settings.json` (permissions; the deny list is the fence), `.claude/skills/lap/` (the lap) | Claude Code |
-| | `AGENTS.md`, `.kiro/agents/factory.json` (the agent; its deny rules are the fence), `.kiro/skills/lap/` (a copy of the lap, kept equal by `gates`) | Kiro CLI |
-| Project plumbing | `.github/CODEOWNERS`, `.github/pull_request_template.md` | GitHub |
+| `template/` | The files the kit owns, at the path a project has them: the rules, the judge (`harness/`, `.github/workflows/`), BMAD rules (`_bmad/custom/`), the agent set-up (`AGENTS.md`, `CLAUDE.md`, the `lap` skill for Claude Code and Kiro) and the fence (`.claude/settings.json`, `.kiro/agents/factory.json`) | `init` copies them; `sync` keeps them up to date. The fence is merged, so a project may add its own deny rules |
+| `seed/` | The files a project starts with and then owns: `MISSION.md`, `README.md`, `PROJECT_NOTES.md`, `.github/CODEOWNERS`, `.claude/launch.json` | `init` copies them once, with the project's names filled in |
+| `bin/` | `kit.py`, its tests, and `kit.json` (the kit's phase: young or mature) | |
+| the rest | This README, `AGENT_SETUP.md`, `CHANGELOG.md`, `docs/`, and the kit's own `CLAUDE.md`, settings and CI | Never copied |
 
-The fence is **off in the kit itself**: the kit's own agent settings deny no paths, and `protected-paths` skips it. The fenced settings live in `fence/`, and `init-project.sh` switches them on in every new project. See [MODIFYING.md](MODIFYING.md).
+The fence is **off in the kit itself**, so you and agents you direct may change the factory here. It is on in every project.
 
-BMAD's own skills are **not** in the kit. Each project installs them, so the kit stays small and BMAD upgrades stay separate from factory changes.
+BMAD's own skills are **not** in the kit. Each project installs them (see `template/RUNBOOK.md`), so the kit stays small and BMAD upgrades stay separate from factory changes.
 
 ## Start a new project
 
-1. On GitHub: **Use this template** on `factory-kit` → `<project>`, private.
-2. Clone it.
-3. Run the one-time script `bash init-project.sh <github-owner> <project>` (add the host as a third value on GitHub Enterprise), then commit.
-4. Follow [RUNBOOK.md](RUNBOOK.md).
+1. Create an empty private repository `<project>` on GitHub (or GitHub Enterprise) and clone it.
+2. Clone `factory-kit` into the same parent folder, next to it.
+3. From the project's folder: `python ../factory-kit/bin/kit.py init --owner <user or team>`, then commit and push.
+4. Follow `RUNBOOK.md` in the project.
+
+## Update a project
+
+From the project's folder, with the kit clone next to it and up to date:
+
+```bash
+python ../factory-kit/bin/kit.py status   # what the kit has that the project does not
+python ../factory-kit/bin/kit.py sync     # takes it, on a new branch factory/sync-<revision>
+```
+
+`sync` writes fenced files, so a person runs it. It commits nothing and prints a pull request body; open the pull request, add `human-judge-change`, and merge when the checks are green. See `template/MODIFYING.md`.
 
 ## Start a new project with an agent
 
@@ -41,7 +51,7 @@ Instead of the manual steps above, hand the setup to an agent. The steps live in
 
 1. Open an agent session (Claude Code or Kiro CLI) in the **parent folder** where the new project should be cloned. Do not use a session opened inside an existing factory project: its rules would apply to the setup.
 2. The machine needs `git`, `gh` (signed in, with the `repo` and `workflow` scopes), Node, `uv`, and Git Bash on Windows.
-3. Fill in the three values and send this prompt. On GitHub Enterprise, add a `Host:` line and pass `--hostname <host>` to `gh api`. If the kit exists only as a local clone, add `Kit: <path to factory-kit>` and read `AGENT_SETUP.md` from that folder instead. To set up for one agent only, add `Agents: kiro-cli` (or `claude-code`).
+3. Fill in the three values and send this prompt. On GitHub Enterprise, add a `Host:` line and pass `--hostname <host>` to `gh api`. If you already have a clone of the kit, add `Kit: <path to factory-kit>` and read `AGENT_SETUP.md` from that folder instead. To set up for one agent only, add `Agents: kiro-cli` (or `claude-code`).
 
 ~~~text
 Set up a new software-factory project from my factory kit.

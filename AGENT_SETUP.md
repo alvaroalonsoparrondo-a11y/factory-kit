@@ -9,7 +9,7 @@ You are an agent asked to create a new software-factory project. The person gave
 They may also give these; otherwise use the default:
 
 - **HOST** — the GitHub host. Default `github.com`; a GitHub Enterprise host such as `github.example.com` otherwise. If the person gives a repository URL, its host is HOST.
-- **KIT** — where the kit comes from. Default the template repository `HOST/OWNER/factory-kit`; or a local folder holding a clone of the kit.
+- **KIT** — a local clone of the kit. Default: clone `HOST/OWNER/factory-kit` into `DIRECTORY/factory-kit` (or use that folder if it is already a clone of it). The person may name another folder.
 - **AGENTS** — which agents the project is set up for: `claude-code`, `kiro-cli`, or both. Default both.
 
 If the person gives a repository URL whose name differs from PROJECT, or a value that contradicts another, stop and ask which one holds.
@@ -20,14 +20,14 @@ This file is the single source for setup. If the person's prompt and this file d
 
 ## Background
 
-The kit is a private GitHub template repository, `OWNER/factory-kit`, or a local clone of it. A project is one copy of it: `PROJECT`. Once the clone exists, read its `README.md`, `RUNBOOK.md` and `MODIFYING.md` before changing anything.
+The kit is the GitHub repository `OWNER/factory-kit`. It is not a template: a project starts as an empty repository, and the kit's tool `bin/kit.py` installs the factory into it (`kit.py init`) and later updates it (`kit.py sync`). The kit's `template/` folder holds the files it keeps up to date in every project, `seed/` the files a project starts with. Read the kit's `README.md`, and in it `template/RUNBOOK.md` and `template/MODIFYING.md`, before changing anything.
 
 Name repositories to `gh` as `HOST/OWNER/<repo>` (for example `gh repo view HOST/OWNER/PROJECT`), and call the API as `gh api --hostname HOST ...`, so every command reaches HOST even when `gh` is signed in to more than one.
 
 ## Rules
 
 - Never create, ask for, print or store a token, password or secret. Those steps belong to the person.
-- Do not change any factory file by hand: `FACTORY_RULES.md`, `AGENTS.md`, `CLAUDE.md`, `harness/`, `.github/`, `_bmad/custom/`, `.claude/settings.json`, `.claude/skills/lap/`, `.kiro/agents/`, `.kiro/skills/lap/`. The only allowed change to them is what `init-project.sh` does.
+- Do not change any factory file by hand: `FACTORY_RULES.md`, `AGENTS.md`, `CLAUDE.md`, `harness/`, `.github/`, `_bmad/custom/`, `.claude/settings.json`, `.claude/skills/lap/`, `.kiro/agents/`, `.kiro/skills/lap/`. The only allowed change to them is what `kit.py init` writes.
 - Setup only. Do not write `MISSION.md` content, a PRD, tickets or application code.
 - Do not change organisation or repository policy to make a step pass: do not switch on GitHub Actions, change a repository's visibility, or add runners. Report the step as open instead.
 - Use HTTPS remotes (`https://HOST/OWNER/<repo>.git`). If a clone or push fails on SSH, switch the remote to HTTPS and retry.
@@ -37,47 +37,40 @@ Name repositories to `gh` as `HOST/OWNER/<repo>` (for example `gh repo view HOST
 ## Step 1: Preflight
 
 - Run `git --version`, `gh auth status --hostname HOST`, `node --version`, `uv --version`. Stop if one is missing, `gh` is not signed in to HOST, or it lacks the `repo` or `workflow` scope.
-- Confirm the kit exists:
-  - template: `gh repo view HOST/OWNER/factory-kit --json isTemplate` shows `"isTemplate": true`;
-  - local folder: `git -C KIT status` works, and note the commit of its `main` (`git -C KIT log -1 --format=%h main`). Use `main`, whatever branch is checked out there.
+- Get the kit: if KIT does not exist, `git clone https://HOST/OWNER/factory-kit.git KIT`. Then check:
+  - `KIT/bin/kit.py` and `KIT/template/` exist;
+  - `git -C KIT status --porcelain` is empty, and `main` is checked out and up to date with its `origin` (`git -C KIT pull --ff-only`);
+  - note the commit: `git -C KIT log -1 --format=%h`.
 - Confirm `HOST/OWNER/PROJECT` does **not** exist, and that DIRECTORY has no folder named `PROJECT`. If either exists, stop and ask.
 
 ## Step 2: Create and clone the repository
 
-From a template:
-
-```bash
-gh repo create HOST/OWNER/PROJECT --private --template HOST/OWNER/factory-kit
-```
-
-A template copy takes a few seconds. Wait until the repository has a `main` branch.
-
-From a local folder (there is no template to copy, so the kit's `main` is pushed into an empty repository):
-
 ```bash
 gh repo create HOST/OWNER/PROJECT --private
-git -C KIT push https://HOST/OWNER/PROJECT.git main:main
+git clone https://HOST/OWNER/PROJECT.git DIRECTORY/PROJECT
 ```
 
-The project then starts with the kit's history instead of one fresh commit; that is expected. Push only `main`, never the kit's other branches.
+The clone is empty; Git warns about that, which is expected. If its branch is not `main`, run `git -C DIRECTORY/PROJECT switch -c main`.
 
-Then clone it into DIRECTORY over HTTPS.
+**Check:** the folder exists, on `main`, with no files yet.
 
-**Check:** the folder exists, on `main`, with the kit's files.
-
-## Step 3: Fill in the placeholders
+## Step 3: Install the factory
 
 ```bash
 # in PROJECT
-bash init-project.sh OWNER PROJECT HOST
+python KIT/bin/kit.py --kit KIT init --owner OWNER --host HOST
+python KIT/bin/kit.py --kit KIT doctor
 ```
 
-**Check:**
-- No file contains a placeholder (two underscores, then `OWNER`, `PROJECT`, `PARENT_DIR` or `HOST`, then two underscores), except `MODIFYING.md`, which explains them.
-- `init-project.sh` is gone. `README.md` is now a short project page, and the kit-only files `AGENT_SETUP.md`, `CHANGELOG.md` and `PROJECT_README.md` are gone, and so is `fence/` (its settings are now in place). Keep following the copy of these instructions you already read.
-- The JSON files `PROJECT/.claude/settings.json` and `PROJECT/.kiro/agents/factory.json` parse. The first has a non-empty deny list, the second a `deny` rule for `fs_write`: they are the fence that keeps Claude Code and Kiro out of the factory files. Check both whatever AGENTS is: they are factory files and stay in the project.
+`init` copies the kit's files, the fence and the seeds (`MISSION.md`, `README.md`, `PROJECT_NOTES.md`, `.github/CODEOWNERS`, `.claude/launch.json`), fills in the names in the seeds, and writes `kit.lock.json`.
 
-Commit ("Fill in project names") and push.
+**Check:**
+- `doctor` prints `doctor: OK` (warnings are fine; read them).
+- No file in PROJECT contains a placeholder: two underscores, then `OWNER`, `PROJECT` or `HOST`, then two underscores.
+- `kit.lock.json` exists and its `revision` is the kit commit you noted in step 1.
+- The JSON files `.claude/settings.json` and `.kiro/agents/factory.json` parse. The first has a non-empty deny list, the second a `deny` rule for `fs_write`: they are the fence that keeps Claude Code and Kiro out of the factory files. Check both whatever AGENTS is: they are factory files and stay in the project.
+
+Commit ("Install the factory from the kit at <commit>") and push: `git push -u origin main`.
 
 ## Step 4: Install and set up BMAD v7 (in PROJECT only)
 
@@ -111,15 +104,7 @@ gh label create human-approved-irreversible --repo HOST/OWNER/PROJECT
 gh label create human-granted-round --repo HOST/OWNER/PROJECT
 ```
 
-Kit remote, for carrying factory changes later (see `MODIFYING.md`):
-
-```bash
-# in PROJECT
-git remote add kit https://HOST/OWNER/factory-kit.git && git fetch kit   # from a template
-git remote add kit KIT && git fetch kit                                  # from a local folder
-```
-
-**Check:** `gh label list --repo HOST/OWNER/PROJECT` shows them; `git remote -v` shows `kit`.
+**Check:** `gh label list --repo HOST/OWNER/PROJECT` shows them.
 
 ## Step 6: Check the judge runs
 
@@ -138,7 +123,7 @@ Try to protect `main` in `OWNER/PROJECT` through the API (`gh api --hostname HOS
 
 Give the person a short report:
 
-1. The link to the repository and the local folder path.
+1. The link to the repository, the local folder path, and the kit folder (KIT), which the project needs next to it for `kit.py sync`.
 2. A table of steps 1–7: done, failed or open, one line each, with evidence (commit ids, workflow run links).
 3. What is left for them, with exact instructions:
    - Branch protection, if step 7 is open.

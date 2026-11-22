@@ -5,6 +5,7 @@
       "Edit(/FACTORY_RULES.md)",
       "Edit(/AGENTS.md)",
       "Edit(/CLAUDE.md)",
+      "Edit(/kit.lock.json)",
       "Edit(/harness/**)",
       "Edit(/.github/**)",
       "Edit(/.claude/settings.json)",
