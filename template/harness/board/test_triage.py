@@ -221,6 +221,24 @@ class Triage(unittest.TestCase):
         out = tr.statuses(str(self.root), "main", [first, ticket], plans)
         self.assertEqual(list(out), ["2"])
         self.assertEqual((out["2"]["state"], out["2"]["fresh"], out["2"]["plan"]), ("ready-to-implement", True, "lap"))
+        self.assertEqual((out["2"]["rationale"], out["2"]["next_step"]), (["link/ has it"], "Run the lap."))
+
+    def test_the_board_reads_decisions_from_origin_main(self):
+        import board
+        self.record()
+        self.git("update-ref", "refs/remotes/origin/main", "HEAD")
+        ticket, plans = self.load()
+        problems = []
+        out = board.triage_statuses(str(self.root), [ticket], plans, problems)
+        self.assertEqual((list(out), out["2"]["fresh"], problems), (["2"], True, []))
+
+    def test_the_board_says_when_decisions_cannot_be_read(self):
+        import board
+        ticket, plans = self.load()
+        problems = []
+        self.assertEqual(board.triage_statuses(str(self.root / "missing"), [ticket], plans, problems), {})
+        self.assertEqual(len(problems), 1)
+        self.assertIn("triage decisions cannot be read", problems[0])
 
 
 if __name__ == "__main__":

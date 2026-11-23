@@ -2,6 +2,23 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-23 — The board shows triage the same way on CI and live (from `factory-pilot-2`)
+
+Seen in `factory-pilot-2`, reviewing the board after triage landed: CI's `BOARD.md` had no decisions in its snapshot, so it said "Start the lap" where the live board said "Triage it". A planned ticket with no decision, or a stale one, still counted as "ready". A fresh `wait` card stayed in Backlog though it needed a human. The drawer showed nothing of the decision.
+
+- **`board.py`:**
+  - `collect()` reads the decisions too (`triage_statuses`, from `origin/main`; CI checks out full history), so `BOARD.md` and the live board agree. A failure to read them is a board problem, not a crash.
+  - With decisions in the snapshot, only a fresh `ready-to-implement` ticket is `ready`. One with no decision or a stale one is `untriaged`, a new status in the counts.
+  - Every planned ticket with a stale decision gets a hint, `Stale (<why>): triage it again (triage <ref>), or the dispatcher will`. It shows on the card and in `BOARD.md`'s table; it is not a call in "Needs you now".
+  - Rows carry `plan_status`, the BMAD plan's `status`.
+- **`triage.py`:** `statuses()` also returns `rationale` and `next_step`.
+- **`dashboard.html`:**
+  - The drawer has a Triage block: route, fresh or `stale: <why>`, summary, rationale, questions, next step, who approves the plan, when it was triaged. Its header adds the plan status and the triage route.
+  - A `ready-to-implement` card whose plan a human approves says "plan: human".
+  - Every fresh decision other than `ready-to-implement` (now also `wait`) puts the card in Needs you, so the column and the tab's count agree.
+- **Tests:** 5 board tests, 3 triage tests.
+- **Not checked visually:** with real decisions. `factory-pilot-2` has none on `main`, so the page was checked with a fake board fed to the dashboard in the browser.
+
 ## 2026-11-23 — The product owner reports each ticket's triage (from `factory-pilot-2`)
 
 Seen in `factory-pilot-2` while re-testing kit `76aeda9`: a triage decision and a BMAD ticket `status` are separate, and only the factory's board and dispatcher read both. `tickets.py` and the product owner (Sofia) never read `docs/triage/`, so "what's ready" or `next` could offer a ticket that triage had sent to `needs-info` or `wait`.

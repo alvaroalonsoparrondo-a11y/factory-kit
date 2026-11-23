@@ -274,16 +274,28 @@ def collect(root, gh, server="https://github.com"):
             ),
         })
 
+    tickets = read_tickets(main_files, problems)
     return {
         "repo": gh.repo,
         "server": server.rstrip("/"),
         "main_sha": git(root, "rev-parse", "--short", "origin/main").strip(),
-        "tickets": read_tickets(main_files, problems),
+        "tickets": tickets,
         "plans": plans,
         "branches": branches,
         "pulls": pulls,
         "problems": problems,
+        "triage": triage_statuses(root, tickets, plans["main"], problems),
     }
+
+
+def triage_statuses(root, tickets, plans, problems):
+    """Each ticket's triage decision on origin/main (docs/triage/<ref>.json), and whether it still holds."""
+    import triage  # here, not at the top: triage imports this module
+    try:
+        return triage.statuses(root, "origin/main", tickets, plans)
+    except (RuntimeError, OSError) as e:
+        problems.append(f"triage decisions cannot be read: {e}")
+        return {}
 
 
 # --------------------------------------------------------------------------- derivation
@@ -382,6 +394,7 @@ def derive(snapshot):
             "epic": t["epic"], "id": t["id"], "title": t["title"], "after": t["after"], "hitl": t["hitl"],
             "ref": t.get("ref", t["id"]), "risk": t.get("risk", ""),
             "plan_path": plan["path"] if plan else None,
+            "plan_status": status,
             "branch": branch,
             "stage": _stage(status, bool(branch), pr),
             "blocked": (plan["blocked_reason"] or "no reason given")
@@ -402,6 +415,7 @@ def derive(snapshot):
     activity = snapshot.get("activity")
     done = {key(r) for r in rows if r["stage"] == "Done"}
     first_ready = set()  # the first startable ticket of each epic
+    triage_on = "triage" in snapshot
     for r in rows:
         r["stops"] = _stops(signals.get(r["ref"], []), now)
         events = signals.get(r["ref"], [])
@@ -415,9 +429,13 @@ def derive(snapshot):
         r["waiting_on"] = [a for a in r["after"] if (r["epic"], a) not in done]
         r["needs_you"] = _needs_you(r, snapshot)
         # A ticket's triage decision, where the snapshot carries decisions (the live board and the dispatcher).
-        r["triage"] = snapshot["triage"].get(r["ref"]) if "triage" in snapshot else None
+        r["triage"] = snapshot["triage"].get(r["ref"]) if triage_on else None
         tri = r["triage"]
-        settled = "triage" not in snapshot or bool(tri and tri["fresh"] and tri["state"] == "ready-to-implement")
+        settled = not triage_on or bool(tri and tri["fresh"] and tri["state"] == "ready-to-implement")
+        r["triaged"] = settled
+        # A stale decision on any planned ticket: the dispatcher triages it again when it is next in line.
+        r["triage_hint"] = (f"Stale ({tri['why']}): triage it again (`triage {r['ref']}`), or the dispatcher will"
+                            if r["stage"] == "Planned" and tri and not tri["fresh"] else None)
         if r["stage"] == "Planned" and not r["blocked"] and not r["waiting_for_you"] and tri and tri["fresh"] \
                 and tri["state"] != "ready-to-implement":
             r["needs_you"] = triage_needs_you(r["ref"], tri)  # any ticket: settling it is planning ahead
@@ -552,7 +570,9 @@ def _status(r):
         return "needs you"
     if r["stage"] != "Planned":
         return "running"
-    return "waiting" if r["waiting_on"] else "ready"
+    if r["waiting_on"]:
+        return "waiting"
+    return "ready" if r["triaged"] else "untriaged"  # untriaged: no decision, or a stale one
 
 
 # --------------------------------------------------------------------------- rendering
@@ -565,9 +585,12 @@ def findings_text(f):
     return f"{f['found']} found, {f['patched']} patched, {f['deferred']} deferred"
 
 
+STATUS_ORDER = ("needs you", "blocked", "quiet", "running", "ready", "untriaged", "waiting", "done", "dropped")
+
+
 def render_markdown(board):
     name = board["repo"].split("/")[-1]
-    order = ("needs you", "blocked", "quiet", "running", "ready", "waiting", "done", "dropped")
+    order = STATUS_ORDER
     summary = " · ".join(f"{board['counts'][s]} {s}" for s in order if board["counts"].get(s))
     out = [f"# Board: {_cell(name)}", "", f"Built from `main` at `{board['main_sha']}`" + (f" · {summary}" if summary else ""), ""]
 
@@ -592,6 +615,8 @@ def render_markdown(board):
             needs = _cell(r["needs_you"]) if r["needs_you"] else "–"
             if r["status"] == "waiting":
                 needs = "– (after " + ", ".join(f"#{a}" for a in r["waiting_on"]) + ")"
+            if not r["needs_you"] and r.get("triage_hint"):
+                needs = f"– ({_cell(r['triage_hint'])})" if r["status"] != "waiting" else needs + f" · {_cell(r['triage_hint'])}"
             checks = "–"
             if r["checks"]:
                 checks = "".join(MARK[r["checks"][c]] for c in CHECKS)

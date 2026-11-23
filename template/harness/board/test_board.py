@@ -434,6 +434,41 @@ class Triage(unittest.TestCase):
         self.assertIn("Which slugs are reserved?", r["needs_you"])
         self.assertEqual(row(board, 1)["needs_you"], "Start the lap")
 
+    def test_only_a_fresh_ready_to_implement_ticket_is_ready(self):
+        board = self.derive([ticket(1), ticket(2), ticket(3), ticket(4)],
+                            {"1": decided(), "3": decided(), "4": decided(fresh=False, why="main changed a.java")})
+        self.assertEqual([row(board, i)["status"] for i in (1, 2, 3, 4)],
+                         ["needs you", "untriaged", "ready", "untriaged"])
+        self.assertEqual((board["counts"]["untriaged"], board["counts"]["ready"]), (2, 1))
+        self.assertIn("2 untriaged", b.render_markdown(board))
+
+    def test_every_stale_ticket_gets_a_hint(self):
+        board = self.derive([ticket(1), ticket(2), ticket(3, after=[1])],
+                            {"1": decided(fresh=False, why="a"), "2": decided(fresh=False, why="b"),
+                             "3": decided(fresh=False, why="c")})
+        self.assertEqual(row(board, 1)["needs_you"], "Triage it (`triage 1`): a")
+        two, three = row(board, 2), row(board, 3)
+        self.assertEqual((two["needs_you"], two["status"]), (None, "untriaged"))
+        self.assertEqual(two["triage_hint"], "Stale (b): triage it again (`triage 2`), or the dispatcher will")
+        self.assertEqual(three["status"], "waiting")
+        self.assertIn("Stale (c)", three["triage_hint"])
+        md = b.render_markdown(board)
+        self.assertIn("– (Stale (b): triage it again", md)
+        self.assertIn("(after #1) · Stale (c)", md)
+        self.assertNotIn("Stale (b)", md.split("## Needs you now")[1].split("## ")[0])  # a hint, not a call
+
+    def test_a_fresh_decision_leaves_no_hint(self):
+        self.assertIsNone(row(self.derive([ticket(1)], {"1": decided()}), 1)["triage_hint"])
+
+    def test_a_fresh_wait_needs_you(self):
+        r = row(self.derive([ticket(1), ticket(2)], {"1": decided(), "2": decided("wait")}), 2)
+        self.assertEqual(r["status"], "needs you")
+        self.assertTrue(r["needs_you"].startswith("Triaged wait: Because."))
+
+    def test_the_row_carries_the_plan_status(self):
+        board = b.derive(snap([ticket(1), ticket(2)], plans={"main": [plan(1, "ready-for-dev")]}))
+        self.assertEqual((row(board, 1)["plan_status"], row(board, 2)["plan_status"]), ("ready-for-dev", ""))
+
 
 if __name__ == "__main__":
     unittest.main()

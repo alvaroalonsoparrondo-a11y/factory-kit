@@ -68,6 +68,13 @@
   .meta .risk-high { color: var(--human); } .meta .risk-medium { color: var(--changes); }
   .hint { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 10.5px; color: var(--muted); line-height: 1.6; overflow-wrap: anywhere; }
   .card.human .hint { color: var(--text); }
+  .triage { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px; line-height: 1.55; max-height: 32vh; overflow-y: auto; }
+  .triage .t-head { font-family: var(--mono); font-size: 11.5px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
+  .triage .t-state { color: var(--text); font-weight: 600; }
+  .triage .t-state.stale { color: var(--changes); }
+  .triage p { margin: 6px 0 0; }
+  .triage ul { margin: 4px 0 0; padding-left: 1.2em; }
+  .triage .t-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin-top: 8px; }
 
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
   @keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
@@ -145,6 +152,7 @@
       <div class="num" id="d-num"></div>
       <h3 id="d-title"></h3>
       <div class="links" id="d-links"></div>
+      <div id="d-triage"></div>
       <button class="close" data-close aria-label="Close">×</button>
     </div>
     <div class="d-body">
@@ -188,8 +196,9 @@ async function getJSON(url) {
 function column(r) {
   if (r.stage === 'Done' || r.stage === 'Dropped') return 'done'
   if (r.status === 'blocked' || r.waiting_for_you || (r.needs_you && r.stage !== 'Planned')) return 'human'
-  // Triaged for a human to settle first: planning ahead, while the factory builds something else.
-  if (r.stage === 'Planned' && r.triage?.fresh && ['ready-to-spec', 'needs-info'].includes(r.triage.state)) return 'human'
+  // Triaged for a human to settle first (spec it, answer it, or change or drop a ticket that waits):
+  // planning ahead, while the factory builds something else.
+  if (r.stage === 'Planned' && r.triage?.fresh && r.triage.state !== 'ready-to-implement') return 'human'
   if (r.stage === 'Planned') return 'backlog'
   if (r.stage === 'In CI') return 'ci'
   if (r.stage === 'In review') return 'review'
@@ -225,6 +234,8 @@ function card(r) {
     const t = r.triage
     const tip = t.fresh ? `${t.summary} (triaged ${t.triaged_at})` : `stale: ${t.why}`
     meta.push(`<span title="${esc(tip)}">triage: ${esc(t.fresh ? t.state : 'stale')}</span>`)
+    if (t.fresh && t.state === 'ready-to-implement' && t.plan === 'human')
+      meta.push('<span class="risk-high" title="a human approves the plan before the lap builds">plan: human</span>')
   }
   if (r.reviews) {
     const f = r.reviews.findings
@@ -235,7 +246,8 @@ function card(r) {
     const n = r.human_wait.stops
     meta.push(`<span title="time the lap said it waited for you">${n} stop${n === 1 ? '' : 's'} · ${Math.floor(r.human_wait.seconds / 60)} min</span>`)
   }
-  const hint = r.needs_you && !next ? `<div class="hint">${inline(r.needs_you)}</div>` : ''
+  const say = r.needs_you && !next ? r.needs_you : r.triage_hint
+  const hint = say ? `<div class="hint">${inline(say)}</div>` : ''
   return `
     <article class="card ${live ? 'live' : ''} ${human ? 'human' : ''} ${next ? 'next' : ''} ${col === 'done' ? 'done' : ''} ${r.stage === 'Dropped' ? 'dropped' : ''}"
              data-epic="${esc(r.epic)}" data-id="${esc(r.id)}" tabindex="0">
@@ -269,7 +281,7 @@ function render() {
     $('banner').innerHTML = banner
   }
   $('repo').textContent = board.repo
-  const order = ['needs you', 'blocked', 'quiet', 'running', 'ready', 'waiting', 'done', 'dropped']
+  const order = ['needs you', 'blocked', 'quiet', 'running', 'ready', 'untriaged', 'waiting', 'done', 'dropped']
   // "Start the lap" on a planned ticket is not a call to come back to this tab.
   const calls = rows.filter((r) => column(r) === 'human').length
   document.title = calls ? `(!) ${calls} · Factory Board` : 'Factory Board'
@@ -303,12 +315,16 @@ function setHTML(id, html) {
 async function refreshDrawer() {
   const r = board.epics.flatMap((e) => e.rows).find((x) => x.epic === open.epic && x.id === open.id)
   if (!r) return
-  $('d-num').textContent = `${r.ref} · ${r.epic} · ${r.stage} · ${r.status}`
+  const head = [r.ref, r.epic, r.stage, r.status]
+  if (r.plan_status) head.push(`plan ${r.plan_status}`)
+  if (r.triage) head.push(`triage ${r.triage.fresh ? r.triage.state : 'stale'}`)
+  $('d-num').textContent = head.join(' · ')
   $('d-title').textContent = r.title
   const links = []
   if (r.pr) links.push(`<a href="${esc(r.pr.url)}" target="_blank" rel="noopener">PR #${esc(r.pr.number)}</a>`)
   if (r.branch) links.push(`<span class="branch">${esc(r.branch)}</span>`)
   setHTML('d-links', links.join(''))
+  setHTML('d-triage', triageBlock(r))
 
   const docs = await getJSON(`/docs.json?epic=${encodeURIComponent(r.epic)}&id=${encodeURIComponent(r.id)}`)
   if (!openName || !docs.some((d) => d.name === openName)) openName = docs[0]?.name || null
@@ -319,6 +335,26 @@ async function refreshDrawer() {
     openText = text
     $('d-doc').innerHTML = text === null ? '<p class="empty">Nothing here yet.</p>' : markdown(text)
   }
+}
+
+// The ticket's triage decision: what it says, and whether it still holds.
+function triageBlock(r) {
+  const t = r.triage
+  if (!t) return r.stage === 'Planned' && 'triaged' in r && !r.triaged
+    ? '<div class="triage"><div class="t-head"><span class="t-state stale">not triaged</span></div></div>' : ''
+  const list = (label, xs) => xs?.length
+    ? `<div class="t-label">${label}</div><ul>${xs.map((x) => `<li>${inline(x)}</li>`).join('')}</ul>` : ''
+  const head = [`<span class="t-state ${t.fresh ? '' : 'stale'}">${esc(t.state)}${t.fresh ? '' : ' · stale'}</span>`]
+  if (t.plan) head.push(`<span>plan approved by: ${t.plan === 'human' ? 'a human' : 'the lap'}</span>`)
+  if (t.triaged_at) head.push(`<span>triaged ${esc(t.triaged_at)}</span>`)
+  return `<div class="triage">
+    <div class="t-head">${head.join('')}</div>
+    ${t.fresh ? '' : `<p>Stale: ${inline(t.why)}</p>`}
+    ${t.summary ? `<p>${inline(t.summary)}</p>` : ''}
+    ${list('Why', t.rationale)}
+    ${list('Questions', t.questions)}
+    ${t.next_step ? `<div class="t-label">Next step</div><p>${inline(t.next_step)}</p>` : ''}
+  </div>`
 }
 
 async function openDrawer(epic, id) {
