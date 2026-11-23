@@ -41,8 +41,9 @@ FENCE = (CLAUDE_FENCE, KIRO_FENCE)
 OLD_FENCE = {CLAUDE_FENCE: "fence/claude-settings.json", KIRO_FENCE: "fence/kiro-factory.json"}
 # The project's own files that are not seeds.
 PROJECT_FILES = ("skills-lock.json",)
-PROJECT_DIRS = ("docs/runtime/",)
-LAP_SKILLS = (".claude/skills/lap/SKILL.md", ".kiro/skills/lap/SKILL.md")
+PROJECT_DIRS = ("docs/runtime/", "docs/triage/")
+# Skills both agents run: the Kiro copy must equal the Claude one.
+SKILL_PAIRS = tuple((f".claude/skills/{n}/SKILL.md", f".kiro/skills/{n}/SKILL.md") for n in ("lap", "triage"))
 GUARDS = "harness/judge/guards.json"
 CODEOWNERS = ".github/CODEOWNERS"
 PLACEHOLDERS = ("__OWNER__", "__PROJECT__", "__HOST__")
@@ -327,9 +328,10 @@ def doctor(root, kit=None, lock=None, quiet=False):
             failures.append(f"{CLAUDE_FENCE} does not deny Edit(/{glob}), a protected path")
         if glob not in kiro:
             failures.append(f"{KIRO_FENCE} does not deny fs_write on {glob}, a protected path")
-    skills = [normal(read(root, s)) for s in LAP_SKILLS]
-    if None in skills or skills[0] != skills[1]:
-        failures.append(f"{LAP_SKILLS[1]} must be a copy of {LAP_SKILLS[0]}")
+    for pair in SKILL_PAIRS:
+        skills = [normal(read(root, s)) for s in pair]
+        if None in skills or skills[0] != skills[1]:
+            failures.append(f"{pair[1]} must be a copy of {pair[0]}")
     owners = (read(root, CODEOWNERS) or b"").decode("utf-8", errors="replace").split()
     for p in paths:
         if "/" + p not in owners:
@@ -508,7 +510,7 @@ def main(argv=None):
     s = sub.add_parser("sync", help="take the kit's changes, on a new branch")
     s.add_argument("--adopt", metavar="REV", help="first sync of a project made before kit.py: the kit revision it matches")
     s.add_argument("--discard", metavar="FILE", action="append", help="take the kit's version of this file")
-    sub.add_parser("doctor", help="check the fence, the lap skills and CODEOWNERS")
+    sub.add_parser("doctor", help="check the fence, the lap and triage skills and CODEOWNERS")
     a = p.parse_args(argv)
     if a.cmd == "init":
         a.project = a.name

@@ -11,8 +11,8 @@ Every file in a project is one of four kinds. The kit's `bin/kit.py` decides whi
 
 | Kind | Where it lives in the kit | What an update does to it |
 |---|---|---|
-| **The kit's** | `template/`, at the same path the project has it: `AGENTS.md`, `CLAUDE.md`, `FACTORY_RULES.md`, `RUNBOOK.md`, `MODIFYING.md`, `harness/`, `.github/` (except `CODEOWNERS`), the `lap` skill, `_bmad/custom/`, `.gitattributes` | Replaced when the kit changed it |
-| **The project's** | `seed/`: `MISSION.md`, `README.md`, `PROJECT_NOTES.md`, `.github/CODEOWNERS`, `.claude/launch.json`. Also `skills-lock.json`, `docs/runtime/` and every file the kit does not have | Never touched. `init` copies the seeds once |
+| **The kit's** | `template/`, at the same path the project has it: `AGENTS.md`, `CLAUDE.md`, `FACTORY_RULES.md`, `RUNBOOK.md`, `MODIFYING.md`, `harness/`, `.github/` (except `CODEOWNERS`), the `lap` and `triage` skills, `_bmad/custom/`, `.gitattributes` | Replaced when the kit changed it |
+| **The project's** | `seed/`: `MISSION.md`, `README.md`, `PROJECT_NOTES.md`, `.github/CODEOWNERS`, `.claude/launch.json`. Also `skills-lock.json`, `docs/runtime/`, `docs/triage/` and every file the kit does not have | Never touched. `init` copies the seeds once |
 | **The fence** | `template/.claude/settings.json`, `template/.kiro/agents/factory.json` | The kit's deny entries are added or removed. The project's own entries and other settings stay |
 | **Merged lines** | `template/.gitignore` | Missing lines are appended. No line is removed |
 

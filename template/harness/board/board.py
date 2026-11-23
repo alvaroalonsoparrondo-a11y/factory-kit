@@ -414,10 +414,19 @@ def derive(snapshot):
         r["quiet_minutes"] = _quiet_minutes(r, activity)
         r["waiting_on"] = [a for a in r["after"] if (r["epic"], a) not in done]
         r["needs_you"] = _needs_you(r, snapshot)
+        # A ticket's triage decision, where the snapshot carries decisions (the live board and the dispatcher).
+        r["triage"] = snapshot["triage"].get(r["ref"]) if "triage" in snapshot else None
+        tri = r["triage"]
+        settled = "triage" not in snapshot or bool(tri and tri["fresh"] and tri["state"] == "ready-to-implement")
+        if r["stage"] == "Planned" and not r["blocked"] and not r["waiting_for_you"] and tri and tri["fresh"] \
+                and tri["state"] != "ready-to-implement":
+            r["needs_you"] = triage_needs_you(r["ref"], tri)  # any ticket: settling it is planning ahead
         if r["stage"] == "Planned" and not r["waiting_on"] and not r["blocked"] and r["epic"] not in first_ready:
             first_ready.add(r["epic"])
-            if not r["waiting_for_you"]:
+            if not r["waiting_for_you"] and settled:
                 r["needs_you"] = "Start the lap" + (" (human in the loop)" if r["hitl"] else "")
+            elif not r["waiting_for_you"] and not (tri and tri["fresh"]):
+                r["needs_you"] = f"Triage it (`triage {r['ref']}`)" + (f": {tri['why']}" if tri else "")
         r["status"] = _status(r)
 
     counts = {}
@@ -514,6 +523,18 @@ def _needs_you(r, snapshot):
             return "A required check has not reported: " + ", ".join(missing)
         return None
     return None
+
+
+def triage_needs_you(ref, decision):
+    """What a human does about a fresh triage decision that is not ready-to-implement."""
+    state, summary = decision["state"], decision.get("summary", "")
+    questions = "; ".join(decision.get("questions") or [])
+    tail = f" Questions: {questions}" if questions else ""
+    if state == "ready-to-spec":
+        return f"Triaged ready-to-spec: {summary} Settle it with the product owner (`refine {ref}`).{tail}"
+    if state == "needs-info":
+        return f"Triaged needs-info: {summary} Answer in the ticket.{tail}"
+    return f"Triaged wait: {summary} Change the ticket to triage it again, or drop it."
 
 
 def _status(r):

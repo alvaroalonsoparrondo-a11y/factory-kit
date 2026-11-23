@@ -46,6 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "board"))
 import board  # noqa: E402  (ticket state from Git, GitHub and the BMAD files)
 import serve  # noqa: E402  (the live board's snapshot: worktrees, lap signals, quiet time)
 import lap_round  # noqa: E402  (the lap's round budget, shared by every check: harness/rounds.json)
+import triage  # noqa: E402  (each ticket's route before its lap: docs/triage/<ref>.json)
 
 # A clean merge of main is not a round (it says nothing about the ticket), but a lap that falls behind
 # again and again is spending without progress: after this many, it stops for the human.
@@ -72,6 +73,15 @@ TOKEN_VARS = ("FACTORY_DISPATCH_TOKEN", "GITHUB_TOKEN", "GH_TOKEN", "GH_ENTERPRI
 # bypassPermissions. `verify-fence` checks this on a scratch repository.
 PERMISSION_MODE = "dontAsk"
 ALLOWED_TOOLS = "Bash Read Edit Write Glob Grep Skill Agent TodoWrite TaskCreate TaskUpdate TaskList TaskGet"
+# A triage only reads: no shell, no edits. The dispatcher records its answer on main.
+TRIAGE_TOOLS = "Read Glob Grep Skill"
+TRIAGE_CAP = 1  # triages at once; short and read-only, they do not count against the lap cap
+
+TRIAGE_PROMPT = (
+    "triage {ref}\n\nYou were started by the factory dispatcher, headless (FACTORY_DISPATCHED=1), in a checkout "
+    "of origin/main. Use the triage skill on ticket {ref}. Nobody can answer a question, and you may not change "
+    "anything. Your final message is the skill's JSON object and nothing else."
+)
 
 HEADLESS_NOTE = (
     "You were started by the factory dispatcher, headless (FACTORY_DISPATCHED=1): the ticket is already "
@@ -143,31 +153,55 @@ class Repo:
             self._git("worktree", "remove", str(path))
         self._git("branch", "-D", branch, check=False)
 
-    def mark_done(self, ticket, ref, pr):
-        """Commit `status: done` in the ticket's plan straight onto main, as the lap's closing step does,
-        from a throwaway detached worktree so no checkout is disturbed. Never force-pushes."""
-        initiative = ticket["source"].split("/")[1]
-        tmp = Path(tempfile.mkdtemp(prefix=f"mark-{ref}-"))
+    def add_detached_worktree(self, path, sha):
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self._git("worktree", "add", "--quiet", "--detach", str(path), sha)
+
+    def remove_detached_worktree(self, path):
+        self._git("worktree", "remove", "--force", str(path), check=False)
+
+    def _commit_to_main(self, prefix, change, folder, message):
+        """Run `change(tmp)` in a throwaway detached worktree of origin/main, commit what it changed under
+        `folder` and push it straight onto main, so no checkout is disturbed. Never force-pushes."""
+        tmp = Path(tempfile.mkdtemp(prefix=prefix))
         tmp.rmdir()
         self._git("worktree", "add", "--quiet", "--detach", str(tmp), "origin/main")
         try:
-            tool = tmp / ".claude" / "skills" / "bmad-agent-po" / "scripts" / "tickets.py"
-            done = subprocess.run([sys.executable, str(tool), "--project-root", str(tmp), "mark", initiative, ref,
-                                   "done"], cwd=tmp, capture_output=True, text=True, encoding="utf-8")
-            if done.returncode != 0:
-                raise RuntimeError(f"tickets.py mark: {(done.stdout + done.stderr).strip()[-300:]}")
-            self._git("add", "-A", board.BMAD_DIR, cwd=tmp)
+            change(tmp)
+            self._git("add", "-A", folder, cwd=tmp)
             if not self._git("diff", "--cached", "--quiet", cwd=tmp, check=False).returncode:
-                return  # already done
-            self._git("commit", "--quiet", "-m",
-                      f"Mark ticket {ref} done: {ticket['title']} merged in {pr}\n\nBy the factory dispatcher.",
-                      cwd=tmp)
+                return  # nothing changed
+            self._git("commit", "--quiet", "-m", f"{message}\n\nBy the factory dispatcher.", cwd=tmp)
             if self._git("push", "--quiet", "origin", "HEAD:main", cwd=tmp, check=False).returncode:
                 self._git("fetch", "--quiet", "origin", cwd=tmp)
                 self._git("rebase", "--quiet", "origin/main", cwd=tmp)  # one local, unpushed commit
                 self._git("push", "--quiet", "origin", "HEAD:main", cwd=tmp)
         finally:
             self._git("worktree", "remove", "--force", str(tmp), check=False)
+
+    def mark_done(self, ticket, ref, pr):
+        """Commit `status: done` in the ticket's plan straight onto main, as the lap's closing step does."""
+        initiative = ticket["source"].split("/")[1]
+
+        def change(tmp):
+            tool = tmp / ".claude" / "skills" / "bmad-agent-po" / "scripts" / "tickets.py"
+            done = subprocess.run([sys.executable, str(tool), "--project-root", str(tmp), "mark", initiative, ref,
+                                   "done"], cwd=tmp, capture_output=True, text=True, encoding="utf-8")
+            if done.returncode != 0:
+                raise RuntimeError(f"tickets.py mark: {(done.stdout + done.stderr).strip()[-300:]}")
+
+        self._commit_to_main(f"mark-{ref}-", change, board.BMAD_DIR,
+                             f"Mark ticket {ref} done: {ticket['title']} merged in {pr}")
+
+    def triage_record(self, decision, ref, sha):
+        """The decision as a record, stamped against the commit the triage read. Raises ValueError."""
+        ticket, plans = triage._load(self.root, sha, ref)
+        return triage.build_record(decision, self.root, sha, ticket, plans)
+
+    def commit_triage(self, record):
+        """Commit docs/triage/<ref>.json straight onto main."""
+        self._commit_to_main(f"triage-{record['ref']}-", lambda tmp: triage.write_record(tmp, record),
+                             triage.RECORD_DIR, f"Triage ticket {record['ref']}: {record['state']}")
 
 
 def _gh_api(args):
@@ -288,6 +322,7 @@ def collect(repo, gh, server, quiet_minutes):
     files = board.bmad_files(repo.root, "origin/main")
     snap["tickets"] = board.read_tickets(files, snap["problems"])
     snap["plans"]["main"] = board.read_plans(files)
+    snap["triage"] = triage.statuses(repo.root, "origin/main", snap["tickets"], snap["plans"]["main"])
     return snap, files
 
 
@@ -298,9 +333,9 @@ def agent_env(port, ref):
     return env
 
 
-def claude_argv(prompt, session, model=None, resume=False):
+def claude_argv(prompt, session, model=None, resume=False, tools=ALLOWED_TOOLS):
     exe = shutil.which("claude") or "claude"
-    argv = [exe, "-p", prompt, "--permission-mode", PERMISSION_MODE, "--allowedTools", ALLOWED_TOOLS,
+    argv = [exe, "-p", prompt, "--permission-mode", PERMISSION_MODE, "--allowedTools", tools,
             "--resume" if resume else "--session-id", session]
     if model:
         argv += ["--model", model]
@@ -497,9 +532,9 @@ class Dispatcher:
     def _compare(self, branch):
         return f"{self.server}/{self.gh.repo}/compare/main...{branch}?expand=1"
 
-    def _worktree_path(self, ref):
+    def _worktree_path(self, ref, kind="story"):
         base = self.worktree_root or (self.repo.main_checkout().parent / f"{self.gh.repo.split('/')[-1]}-wt")
-        return base / f"story-{ref}"
+        return base / f"{kind}-{ref}"
 
     # ---- the pass
 
@@ -515,7 +550,13 @@ class Dispatcher:
         runs = state.setdefault("runs", {})
         shared = shared_paths(files)
         rep = {"ready": [], "claimed": [], "started": [], "running": [], "waiting": [], "needs_you": [],
-               "closed": [], "post_merge_blocked": [], "problems": list(derived["problems"])}
+               "closed": [], "post_merge_blocked": [], "triaging": [], "triaged": [],
+               "problems": list(derived["problems"])}
+        # Triage gates a lap only where the snapshot carries decisions (collect() always does).
+        triage_on = "triage" in snapshot
+        decisions = snapshot.get("triage") or {}
+        triages = state.setdefault("triage", {})
+        self._recorded = set()  # decisions committed this pass: the snapshot does not have them yet
 
         self.headless_ok = True
         if self.agents:
@@ -539,6 +580,11 @@ class Dispatcher:
                     rep["needs_you"].append((ref, f"after the merge: {action['what']}"))
 
         busy = sum(1 for run in runs.values() if self._running(run))
+
+        # Triages this dispatcher started: still running, or finished and to be recorded.
+        for ref in list(triages):
+            self._finish_triage(ref, triages, rep)
+        self._save(state)
 
         # Laps this dispatcher owns.
         for ref in list(runs):
@@ -583,6 +629,19 @@ class Dispatcher:
                 continue
             deps = [self._ref_of(tickets, t["epic"], a) or a for a in t["after"]]
             open_deps = [d for d in deps if rows.get(d, {}).get("stage") != "Done"]
+            if triage_on:
+                decision = decisions.get(ref)
+                if not (decision and decision["fresh"]):
+                    # Triage the next in line only: every prerequisite done or in flight.
+                    if all(d in in_flight for d in open_deps):
+                        self._triage(ref, decision, triages, rep, paused)
+                        self._save(state)
+                    else:
+                        rep["waiting"].append((ref, "after " + ", ".join(open_deps) + "; triaged when next in line"))
+                    continue
+                if decision["state"] != "ready-to-implement":
+                    rep["needs_you"].append((ref, board.triage_needs_you(ref, decision)))
+                    continue
             if open_deps:
                 rep["waiting"].append((ref, "after " + ", ".join(open_deps)))
                 continue
@@ -631,6 +690,97 @@ class Dispatcher:
         if self.runner.exit_code(run.get("exit_file", "")) is not None:
             return False
         return self.runner.alive(run.get("pid"))
+
+    # ---- triage
+
+    def _triage(self, ref, decision, triages, rep, paused):
+        """Start a read-only triage of a ticket with no decision, or a stale one; or say why not yet."""
+        if ref in self._recorded:
+            rep["waiting"].append((ref, "triaged this pass; the next pass reads the decision"))
+            return
+        what = "triage again" if decision else "triage"
+        why = f" ({decision['why']})" if decision and decision.get("why") else ""
+        run = triages.get(ref)
+        if run:
+            if run.get("halted"):
+                rep["needs_you"].append((ref, f"{run['halted']} Then `dispatch.py release {ref}`."))
+            return  # running, or waiting out a usage limit: _finish_triage reported it
+        if not self.agents:
+            rep["needs_you"].append((ref, f"{what}{why}: say `triage {ref}` in a session on main, record it with "
+                                          f"`python harness/board/triage.py {ref} record <answer file>` and commit "
+                                          f"{triage.record_path(ref)} to main"))
+            return
+        if not self.headless_ok:
+            return
+        if paused:
+            rep["waiting"].append((ref, f"needs {what}{why}; the dispatcher is paused (`dispatch.py unpause`)"))
+            return
+        if sum(1 for r in triages.values() if r.get("pid") and not r.get("halted")) >= TRIAGE_CAP:
+            rep["waiting"].append((ref, f"queued for {what}{why}"))
+            return
+        if self.dry_run:
+            rep["triaging"].append((ref, f"would {what}{why}"))
+            return
+        sha = self.repo.sha("origin/main")
+        path = self._worktree_path(ref, "triage")
+        log = Path(self.store.folder) / "logs" / f"{ref}-triage-{sha[:7]}.log"
+        exit_file = log.with_suffix(".exit")
+        self.repo.add_detached_worktree(path, sha)
+        run = {"ref": ref, "sha": sha, "worktree": str(path), "log": str(log), "exit_file": str(exit_file),
+               "session": str(uuid.uuid4()), "started": now_iso(), "halted": None}
+        run["pid"] = self.runner.start(
+            claude_argv(TRIAGE_PROMPT.format(ref=ref), run["session"], self.model, tools=TRIAGE_TOOLS),
+            str(path), agent_env("", ref), log, exit_file)
+        triages[ref] = run
+        rep["triaging"].append((ref, f"{what}{why}: started at {sha[:7]} (log {log})"))
+
+    def _finish_triage(self, ref, triages, rep):
+        """Record a finished triage's decision on main, or stop it for the human."""
+        run = triages[ref]
+        if run.get("halted"):
+            return
+        if not run.get("pid"):  # waiting out a usage limit
+            if self.clock() >= run.get("retry_after", 0):
+                del triages[ref]
+            else:
+                rep["waiting"].append((ref, "triage hit a usage limit; it is tried again later"))
+            return
+        code = self.runner.exit_code(run["exit_file"])
+        if code is None and self.runner.alive(run["pid"]):
+            rep["triaging"].append((ref, f"running (pid {run['pid']}, log {run['log']})"))
+            return
+
+        def done():
+            if not self.dry_run:
+                self.repo.remove_detached_worktree(run["worktree"])
+
+        def halt(why):
+            run["halted"] = why
+            done()
+            rep["needs_you"].append((ref, f"{why} Then `dispatch.py release {ref}`."))
+
+        if code != 0:
+            if LIMIT_RE.search(self.runner.log_tail(run["log"], 1500)):
+                done()
+                triages[ref] = {"ref": ref, "retry_after": self.clock() + LIMIT_RETRY_MINUTES * 60}
+                rep["waiting"].append((ref, "triage hit a usage limit; it is tried again later"))
+                return
+            halt(f"Triage of {ref} ended without an answer (exit {code}): read {run['log']}.")
+            return
+        decision = triage.parse_decision(self.runner.log_tail(run["log"], 50_000))
+        try:
+            if decision is None:
+                raise ValueError("no JSON object with a `state` in its answer")
+            record = self.repo.triage_record(decision, ref, run["sha"])
+        except ValueError as e:
+            halt(f"Triage of {ref} gave an answer that cannot be recorded: {e}. Read {run['log']}.")
+            return
+        if not self.dry_run:
+            self.repo.commit_triage(record)
+        done()
+        del triages[ref]
+        self._recorded.add(ref)
+        rep["triaged"].append((ref, f"{record['state']}: {record['summary']}"))
 
     # ---- claim and start
 
@@ -899,7 +1049,7 @@ class Dispatcher:
 def render(rep, dry_run, main_sha, paused):
     flags = [f for f, on in (("dry run: nothing changed", dry_run), ("paused: no new laps", paused)) if on]
     out = [f"dispatch {now_iso()}{' (' + '; '.join(flags) + ')' if flags else ''} · origin/main {main_sha[:7]}"]
-    for name, key in (("Ready", "ready"), ("Claimed", "claimed"), ("Started", "started"), ("Running", "running"),
+    for name, key in (("Triaging", "triaging"), ("Triaged", "triaged"), ("Ready", "ready"), ("Claimed", "claimed"), ("Started", "started"), ("Running", "running"),
                       ("Waiting", "waiting"), ("Blocked by post-merge actions", "post_merge_blocked"),
                       ("Closed", "closed"), ("Needs you", "needs_you"), ("Problems", "problems")):
         out.append(f"{name}:")
@@ -1025,6 +1175,14 @@ def main(argv=None):
                 print("dispatch: a pass is running; try again in a moment", file=sys.stderr)
                 return 1
             state = store.load()
+            if args.ref in state.get("triage", {}):
+                gone = state["triage"].pop(args.ref)
+                store.save(state)
+                print(f"{'Forgot' if args.cmd == 'forget' else 'Released'} the triage of {args.ref}: the next pass "
+                      f"triages it again when it is next in line." + (f" Its worktree {gone['worktree']} is left."
+                                                                     if gone.get("worktree") and args.cmd == "forget" else ""))
+                if args.ref not in state.get("runs", {}):
+                    return 0
             run = state.get("runs", {}).get(args.ref)
             if not run:
                 print(f"dispatch: no lap {args.ref} in {store.path}", file=sys.stderr)

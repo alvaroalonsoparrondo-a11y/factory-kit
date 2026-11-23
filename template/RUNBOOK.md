@@ -36,6 +36,21 @@ You drive the factory by hand at three points: you start each lap, you merge the
 4. `bmad-agent-po` — Sofia slices the epic into tickets. The first one is the walking skeleton.
 5. Commit the planning documents to `main`.
 
+## Triage: plan the next ticket while the factory builds this one
+
+Before a ticket's lap, the `triage` skill reads the ticket, `MISSION.md`, the code on `main` and the board, and picks one route. It only reads; nothing it says changes a file until it is recorded.
+
+| Route | Means | What happens |
+|---|---|---|
+| `ready-to-implement` | Clear, bounded, nothing to decide | The lap approves its own plan when the plan has no open questions (a human still does for `risk = "high"` or `hitl = true`) |
+| `ready-to-spec` | The goal is right, a decision is open | Shows under **Needs you** with the questions. Settle them with Sofia (`refine <ref>`) |
+| `needs-info` | Cannot be built or specified yet | Shows under **Needs you** with the questions. Answer them in the ticket |
+| `wait` | Not now | Shows under **Needs you**. Change the ticket, or drop it |
+
+A decision is `docs/triage/<ref>.json` on `main`, written by `python harness/board/triage.py <ref> record <answer file>` and committed by a human or the dispatcher. It goes **stale** when the ticket, its leaf or epic file, or its prerequisites change, or when `main` changes a path in its `touches`: then the ticket is triaged again. So editing the ticket after `ready-to-spec` or `needs-info` is how you send it back. `python harness/board/triage.py <ref> check` says where a ticket stands.
+
+By hand: in a session on an up-to-date `main` (not a lap worktree), say `triage 1.3`; it offers to record the decision; commit the file to `main`. The dispatcher does it for you (below): while ticket N builds, it triages N+1, so the questions for N+1 reach you before N merges, and it triages N+1 again when N merges and changes its files.
+
 ## Run laps
 
 In an agent session opened in this folder. With Kiro, start it as the factory agent, so the fence applies:
@@ -66,12 +81,13 @@ To keep working in this folder while a big lap runs, start the lap in a Claude C
 
 `harness/dispatch/dispatch.py` is the factory's queue and orchestrator. It is a local script: it cannot receive webhooks, so it polls. Each pass reads the tickets the way the live board does (Git, GitHub, every worktree, lap signals, quiet time) and then:
 
+- **triages** the next ticket in line (every prerequisite done or in flight) when it has no decision or a stale one: a read-only agent (`Read Glob Grep Skill`, no shell, no edits) in a detached worktree of `origin/main`, `<project>-wt/triage-<ref>`, one at a time; the dispatcher checks its answer with `triage.py` and commits `docs/triage/<ref>.json` straight to `main`. With `--no-agents` it asks you to triage instead. A ticket triaged anything but `ready-to-implement` goes to you;
 - **claims** each ready ticket once, by creating `story/<ref>` on GitHub (if the branch already exists, someone else has the ticket and it is skipped), and checks it out in its own worktree, `<project>-wt/story-<ref>`, next to this clone, with its own gate port (8091, 8092, …);
 - **starts** the lap there, headless (`claude -p "lap <ref>"`), or, with `--no-agents`, tells you to start it;
 - **routes** what happens next: a red `gates` gets a fix round with the check's output, a pull request behind `main` gets a "main moved" round, a red guard and a green pull request go to you;
 - **closes** a merged lap: marks the ticket done on `main` (as the lap's section C does), pulls `main` in the main checkout if it is clean and on `main`, removes the worktree, and writes a lap report line.
 
-A ticket is ready when every ticket in its `after` is merged and their post-merge actions are done, it has no `story/<ref>` branch, it is not blocked or human-in-the-loop, and its `touches` do not overlap a lap in flight. **A ticket without `touches` runs alone**, so give tickets `touches` (the product owner does this when slicing) before you expect parallel laps. At most two headless laps run at once (`--cap`).
+A ticket is ready when its triage is a fresh `ready-to-implement`, every ticket in its `after` is merged and their post-merge actions are done, it has no `story/<ref>` branch, it is not blocked or human-in-the-loop, and its `touches` do not overlap a lap in flight. **A ticket without `touches` runs alone**, so give tickets `touches` (the product owner does this when slicing) before you expect parallel laps. At most two headless laps run at once (`--cap`).
 
 **Two ways to run it:**
 

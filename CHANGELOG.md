@@ -2,6 +2,28 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-23 — Triage: each ticket's route is decided before its lap (from `factory-pilot-2`)
+
+Seen in `factory-pilot-2`, lap 1.2: the lap stopped halfway for planning. `bmad-build`'s CHECKPOINT 1 waited for a human to approve the plan, so the factory could not build one ticket while the human planned the next. The board's first column read "Backlog — planned" though no ticket in it had a plan. Planning a ticket fully in advance was rejected: its code plan goes stale once the ticket before it merges. The split kept is "settle the intent early, write the code plan at lap time". After warpdotdev-demos/cloud-factory-demo's `triage` skill, with BMAD tickets in place of GitHub issues.
+
+- **`triage` skill** (`.claude/skills/triage/`, copied to `.kiro/skills/triage/`): read-only. It reads the ticket, its epic, `MISSION.md`, the code on `main` and the board, and answers one JSON object with one route: `ready-to-implement`, `ready-to-spec`, `needs-info` or `wait`. When unsure, it picks the more cautious route.
+- **`harness/board/triage.py`:**
+  - `record` checks the answer and writes `docs/triage/<ref>.json`. The file carries the commit it was made on, a fingerprint of the ticket (its entry, leaf file and epic file) and which prerequisites were done.
+  - `check` says `none`, `fresh <route>` or `stale <route>: <why>`. A decision goes stale when the ticket or its epic changes, a prerequisite is done, or `main` changes a path in the ticket's `touches`.
+  - A `ready-to-implement` decision on an entry with `risk = "high"` or `hitl = true` still has a human approve the plan.
+- **Dispatcher:**
+  - It triages the next ticket in line (every prerequisite done or in flight) when its decision is missing or stale. The triage runs as a headless agent limited to `Read Glob Grep Skill`, in a detached worktree of `origin/main`, one at a time. The dispatcher commits the decision to `main`, the way it marks a ticket done (`Repo._commit_to_main`, now shared).
+  - It claims only tickets whose decision is a fresh `ready-to-implement`. Other routes go to Needs you with their questions.
+  - A failed triage stops until `dispatch.py release <ref>`; a usage limit is tried again after 30 minutes. With `--no-agents`, it asks the human to triage.
+- **Lap:** step 3 reads `triage.py <ref> check`. On a fresh `ready-to-implement` with `plan: the lap approves it`, the lap approves its own plan at CHECKPOINT 1, but only when the plan has no open questions and its intent matches the triage. `_bmad/custom/bmad-build.toml` says the same. Every other case waits for the human, as before. The pull request states the route and who approved the plan.
+- **Board:**
+  - A ticket's decision shows on its card (`triage: <route>`, or `stale`). `ready-to-spec` and `needs-info` cards move to Needs you, for any ticket, not only the next one.
+  - The first ticket with no fresh decision says "Triage it". The Backlog column's subtitle is now "triage".
+  - Snapshots without decisions (CI's `board.yml`) behave as before.
+- **Protected:** the triage skill is a protected path in `FACTORY_RULES.md`, `guards.json`, both fences and the seed `CODEOWNERS`. `kit.py doctor` checks that the Kiro copy matches, as for the lap skill. `docs/triage/` is the project's, like `docs/runtime/`.
+- **Tests:** `test_triage.py` (14, on a scratch repository), 11 dispatcher tests, 5 board tests.
+- **Not done:** the judge and `gates.yml` still compare only the lap skill's two copies; `kit.py doctor` covers the triage skill's.
+
 ## 2026-11-23 — Dashboard: ticket no longer shows in "Needs you" during runtime verification
 
 Seen: while `serve.py` reads plan files from the working tree, a ticket with `plan_status = "built"` (BMAD review just committed locally) appeared in the **"Needs you"** column with an "Open the pull request" hint for the entire duration of local gates + runtime verification — before the lap had pushed anything. The board could not tell a running lap from a stalled one.

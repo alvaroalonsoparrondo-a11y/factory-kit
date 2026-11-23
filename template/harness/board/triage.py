@@ -1,0 +1,289 @@
+#!/usr/bin/env python3
+"""Records a ticket's triage decision and says whether it still holds.
+
+Part of the judge. Human-owned: an agent may run it and may not change it.
+Standard library only (Python 3.11+).
+
+  python harness/board/triage.py <ref> check                 none | fresh <state> | stale <state>: <why>
+  python harness/board/triage.py <ref> record <decision.json>  check a decision and write docs/triage/<ref>.json
+
+A decision comes from the `triage` skill: one JSON object with `state`, `summary`, `rationale`,
+`questions` and `next_step`. `record` checks it, stamps it with the commit of `origin/main` and a
+fingerprint of the ticket, and writes `docs/triage/<ref>.json` in this checkout; a human (or the
+dispatcher) commits it to `main`. Everything is read from `origin/main` (`--rev` to change), so a
+branch's copy of a decision never counts.
+
+A decision goes stale when, on main since it was made:
+- the ticket's entry, its leaf file or its epic file changed (Sofia refined it, a decision landed);
+- the set of its `after` prerequisites that are done changed (the ticket before it merged);
+- a path in its `touches` changed (any code path when the entry has no `touches`).
+A stale decision is no decision: the ticket is triaged again.
+
+`plan` in a ready-to-implement decision says who approves the lap's plan: `lap` (the lap approves its
+own plan when it has no open questions) or `human` (the entry has `risk = "high"` or `hitl = true`).
+"""
+import argparse
+import datetime as dt
+import fnmatch
+import hashlib
+import json
+import posixpath
+import subprocess
+import sys
+import tomllib
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import board  # noqa: E402
+
+STATES = ("ready-to-implement", "ready-to-spec", "needs-info", "wait")
+RECORD_DIR = "docs/triage"
+# Changes under these never make a decision stale by themselves: decisions, and BMAD bookkeeping
+# (the ticket's own files are covered by its fingerprint).
+NOT_CODE = (RECORD_DIR + "/", board.BMAD_DIR + "/", ".lap/", ".factory/")
+_cache = {}
+
+
+def git(root, *args, check=True):
+    done = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, encoding="utf-8")
+    if check and done.returncode != 0:
+        raise RuntimeError(f"git {' '.join(args)}: {done.stderr.strip()}")
+    return done.stdout if done.returncode == 0 else None
+
+
+def record_path(ref):
+    return f"{RECORD_DIR}/{ref}.json"
+
+
+# --------------------------------------------------------------------------- the decision
+
+def parse_decision(text):
+    """The last JSON object in `text` that has a `state` (an agent's final message, maybe with log lines)."""
+    found, at = None, 0
+    decoder = json.JSONDecoder()
+    while True:
+        start = text.find("{", at)
+        if start < 0:
+            return found
+        try:
+            obj, end = decoder.raw_decode(text, start)
+        except ValueError:
+            at = start + 1
+            continue
+        if isinstance(obj, dict) and "state" in obj:
+            found = obj
+        at = end
+
+
+def validate(decision, ticket):
+    """The decision, cleaned; raises ValueError when it cannot be recorded."""
+    if not isinstance(decision, dict):
+        raise ValueError("the decision is not a JSON object")
+    state = str(decision.get("state", "")).strip().lower().replace(" ", "-").replace("_", "-")
+    state = {"ready-to-build": "ready-to-implement", "wait-to-implement": "wait"}.get(state, state)
+    if state not in STATES:
+        raise ValueError(f"unknown state {decision.get('state')!r}; one of {', '.join(STATES)}")
+    ref = str(decision.get("ref") or ticket["ref"])
+    if ref != ticket["ref"]:
+        raise ValueError(f"the decision is for {ref}, not {ticket['ref']}")
+    strings = lambda key: [str(x).strip() for x in (decision.get(key) or []) if str(x).strip()]
+    out = {"ref": ref, "state": state, "summary": str(decision.get("summary", "")).strip(),
+           "rationale": strings("rationale"), "questions": strings("questions"),
+           "next_step": str(decision.get("next_step", "")).strip()}
+    if not out["summary"]:
+        raise ValueError("the decision has no summary")
+    if state in ("ready-to-spec", "needs-info") and not out["questions"]:
+        raise ValueError(f"{state} needs at least one question")
+    if state == "ready-to-implement":
+        if out["questions"]:
+            raise ValueError("ready-to-implement with open questions: choose ready-to-spec or needs-info")
+        human = [why for why, on in (('risk = "high"', ticket.get("risk") == "high"), ("hitl = true", ticket.get("hitl")))
+                 if on]
+        out["plan"] = "human" if human else "lap"
+        if human:
+            out["rationale"].append(f"The entry has {' and '.join(human)}: a human approves the lap's plan.")
+    return out
+
+
+# --------------------------------------------------------------------------- what the decision rests on
+
+def _tickets_dir(ticket):
+    return posixpath.dirname(ticket["source"])
+
+
+def ticket_texts(root, rev, ticket):
+    """{name: text} of what the ticket's intent is made of: its raw entry, its leaf file, its epic file."""
+    out = {}
+    raw = git(root, "show", f"{rev}:{ticket['source']}", check=False) or ""
+    try:
+        entries = tomllib.loads(raw).get("entry", [])
+    except tomllib.TOMLDecodeError:
+        entries = []
+    entry = next((e for e in entries if str(e.get("id")) == ticket["id"]), None)
+    out["entry"] = json.dumps(entry, sort_keys=True, default=str)
+    tickets_dir = _tickets_dir(ticket)
+    epic_dir = posixpath.dirname(tickets_dir)
+    epic_file = f"{epic_dir}/{posixpath.basename(epic_dir)}.md"
+    out[epic_file] = git(root, "show", f"{rev}:{epic_file}", check=False) or ""
+    names = (git(root, "ls-tree", "--name-only", rev, tickets_dir + "/", check=False) or "").splitlines()
+    for name in names:
+        if not name.endswith(".md") or name.endswith("-plan.md"):
+            continue
+        text = git(root, "show", f"{rev}:{name}", check=False) or ""
+        if str(board.parse_frontmatter(text).get("id", "")).strip("'\"") == ticket["id"]:
+            out[name] = text
+    return out
+
+
+def fingerprint(root, rev, ticket):
+    h = hashlib.sha256()
+    for name, text in sorted(ticket_texts(root, rev, ticket).items()):
+        h.update(name.encode() + b"\0" + text.replace("\r\n", "\n").encode("utf-8") + b"\0")
+    return h.hexdigest()[:16]
+
+
+def done_prereqs(ticket, plans):
+    """The ticket's `after` ids whose plan on main says done."""
+    done = {p["ticket"] for p in plans if p["epic"] == ticket["epic"] and p["status"] == "done"}
+    return sorted(a for a in ticket["after"] if a in done)
+
+
+def _touched(path, patterns):
+    if patterns is None:
+        return not path.startswith(NOT_CODE)
+    for p in patterns:
+        if fnmatch.fnmatchcase(path, p) or (p.endswith("/**") and path.startswith(p[:-2])):
+            return True
+    return False
+
+
+# --------------------------------------------------------------------------- record and check
+
+def build_record(decision, root, rev, ticket, plans, now=None):
+    out = validate(decision, ticket)
+    out.update({
+        "triaged_at": now or dt.datetime.now().astimezone().isoformat(timespec="seconds"),
+        "main_sha": git(root, "rev-parse", rev).strip(),
+        "fingerprint": fingerprint(root, rev, ticket),
+        "prereqs_done": done_prereqs(ticket, plans),
+    })
+    return out
+
+
+def write_record(folder, record):
+    path = Path(folder) / record_path(record["ref"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path
+
+
+def read_record(root, rev, ref):
+    text = git(root, "show", f"{rev}:{record_path(ref)}", check=False)
+    if not text:
+        return None
+    try:
+        rec = json.loads(text)
+    except ValueError:
+        return {"state": "?", "broken": True}
+    return rec if isinstance(rec, dict) else {"state": "?", "broken": True}
+
+
+def freshness(root, rev, record, ticket, plans):
+    """(fresh, why): whether a recorded decision still holds on `rev`."""
+    if record.get("broken") or record.get("state") not in STATES:
+        return False, f"{record_path(ticket['ref'])} cannot be read"
+    if record.get("fingerprint") != fingerprint(root, rev, ticket):
+        return False, "the ticket, its leaf file or its epic file changed since"
+    if record.get("prereqs_done", []) != done_prereqs(ticket, plans):
+        return False, "a prerequisite was done since"
+    base = record.get("main_sha", "")
+    if not base or git(root, "cat-file", "-e", f"{base}^{{commit}}", check=False) is None:
+        return False, "the commit it was made on is unknown here"
+    changed = (git(root, "diff", "--name-only", base, rev, check=False) or "").splitlines()
+    hit = [p for p in changed if _touched(p, ticket.get("touches"))]
+    if hit:
+        more = f" and {len(hit) - 3} more" if len(hit) > 3 else ""
+        return False, "main changed " + ", ".join(hit[:3]) + more
+    return True, ""
+
+
+def statuses(root, rev, tickets, plans):
+    """{ref: {state, fresh, why, summary, questions, plan, triaged_at}} for every ticket with a decision.
+    Cached per commit: the answer depends on nothing else."""
+    sha = (git(root, "rev-parse", "--verify", "--quiet", rev, check=False) or "").strip()
+    key = (str(root), sha)
+    if sha and key in _cache:
+        return _cache[key]
+    out = {}
+    for t in tickets:
+        rec = read_record(root, rev, t["ref"])
+        if rec is None:
+            continue
+        fresh, why = freshness(root, rev, rec, t, plans)
+        out[t["ref"]] = {"state": rec.get("state"), "fresh": fresh, "why": why, "summary": rec.get("summary", ""),
+                         "questions": rec.get("questions", []), "plan": rec.get("plan"),
+                         "triaged_at": rec.get("triaged_at", "")}
+    if sha:
+        _cache.clear()
+        _cache[key] = out
+    return out
+
+
+def _load(root, rev, ref):
+    files = board.bmad_files(root, rev)
+    problems = []
+    tickets = board.read_tickets(files, problems)
+    plans = board.read_plans(files)
+    ticket = next((t for t in tickets if t["ref"] == ref), None)
+    if ticket is None:
+        raise SystemExit(f"triage: no ticket {ref} in the tickets.toml files on {rev}")
+    return ticket, plans
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="Record a ticket's triage decision, or check whether it holds.")
+    ap.add_argument("ref")
+    ap.add_argument("--root", default=".")
+    ap.add_argument("--rev", default="origin/main", help="where tickets and decisions are read (default origin/main)")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("check", help="none | fresh <state> | stale <state>: <why>")
+    r = sub.add_parser("record", help="check a decision and write docs/triage/<ref>.json here")
+    r.add_argument("decision", help="a file with the triage skill's JSON answer")
+    args = ap.parse_args(argv)
+    sys.stdout.reconfigure(encoding="utf-8")
+    ticket, plans = _load(args.root, args.rev, args.ref)
+
+    if args.cmd == "check":
+        rec = read_record(args.root, args.rev, args.ref)
+        if rec is None:
+            print("none")
+            print(f"no decision for {args.ref} on {args.rev}: triage it")
+            return 0
+        fresh, why = freshness(args.root, args.rev, rec, ticket, plans)
+        if not fresh:
+            print(f"stale {rec.get('state')}: {why}")
+            return 0
+        print(f"fresh {rec['state']}")
+        if rec["state"] == "ready-to-implement":
+            print(f"plan: {'the lap approves it' if rec.get('plan') == 'lap' else 'a human approves it'}")
+        print(rec.get("summary", ""))
+        for q in rec.get("questions", []):
+            print(f"- {q}")
+        return 0
+
+    try:
+        decision = parse_decision(Path(args.decision).read_text(encoding="utf-8"))
+        if decision is None:
+            raise ValueError(f"no JSON object with a `state` in {args.decision}")
+        rec = build_record(decision, args.root, args.rev, ticket, plans)
+    except (OSError, ValueError) as e:
+        print(f"refused: {e}")
+        return 1
+    path = write_record(args.root, rec)
+    print(f"recorded {rec['state']} for {args.ref} at {rec['main_sha'][:7]}: {path}")
+    print("Commit it to main; until then nothing reads it.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
