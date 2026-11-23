@@ -162,22 +162,9 @@ class Repo:
 
     def _commit_to_main(self, prefix, change, folder, message):
         """Run `change(tmp)` in a throwaway detached worktree of origin/main, commit what it changed under
-        `folder` and push it straight onto main, so no checkout is disturbed. Never force-pushes."""
-        tmp = Path(tempfile.mkdtemp(prefix=prefix))
-        tmp.rmdir()
-        self._git("worktree", "add", "--quiet", "--detach", str(tmp), "origin/main")
-        try:
-            change(tmp)
-            self._git("add", "-A", folder, cwd=tmp)
-            if not self._git("diff", "--cached", "--quiet", cwd=tmp, check=False).returncode:
-                return  # nothing changed
-            self._git("commit", "--quiet", "-m", f"{message}\n\nBy the factory dispatcher.", cwd=tmp)
-            if self._git("push", "--quiet", "origin", "HEAD:main", cwd=tmp, check=False).returncode:
-                self._git("fetch", "--quiet", "origin", cwd=tmp)
-                self._git("rebase", "--quiet", "origin/main", cwd=tmp)  # one local, unpushed commit
-                self._git("push", "--quiet", "origin", "HEAD:main", cwd=tmp)
-        finally:
-            self._git("worktree", "remove", "--force", str(tmp), check=False)
+        `folder` and push it straight onto main, so no checkout is disturbed. Never force-pushes.
+        The same code records a hand triage (`triage.py record --push`)."""
+        triage.commit_to_main(self.root, prefix, change, folder, f"{message}\n\nBy the factory dispatcher.")
 
     def mark_done(self, ticket, ref, pr):
         """Commit `status: done` in the ticket's plan straight onto main, as the lap's closing step does."""
@@ -707,8 +694,8 @@ class Dispatcher:
             return  # running, or waiting out a usage limit: _finish_triage reported it
         if not self.agents:
             rep["needs_you"].append((ref, f"{what}{why}: say `triage {ref}` in a session on main, record it with "
-                                          f"`python harness/board/triage.py {ref} record <answer file>` and commit "
-                                          f"{triage.record_path(ref)} to main"))
+                                          f"`python harness/board/triage.py {ref} record <answer file> --push` "
+                                          f"(it commits {triage.record_path(ref)} to main for you)"))
             return
         if not self.headless_ok:
             return

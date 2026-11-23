@@ -66,9 +66,9 @@ Before a ticket's lap, the `triage` skill reads the ticket, `MISSION.md`, the co
 | `needs-info` | Cannot be built or specified yet | Shows under **Needs you** with the questions. Answer them in the ticket |
 | `wait` | Not now | Shows under **Needs you**. Change the ticket, or drop it |
 
-A decision is `docs/triage/<ref>.json` on `main`, written by `python harness/board/triage.py <ref> record <answer file>` and committed by a human or the dispatcher. It goes **stale** when the ticket, its leaf or epic file, or its prerequisites change, or when `main` changes a path in its `touches`: then the ticket is triaged again. So editing the ticket after `ready-to-spec` or `needs-info` is how you send it back. `python harness/board/triage.py <ref> check` says where a ticket stands.
+A decision is `docs/triage/<ref>.json` on `main`, written by `python harness/board/triage.py <ref> record <answer file> --push`, which commits it straight onto `main` from a throwaway worktree. The dispatcher records its own triages the same way, and when you triage by hand the agent runs it once you say yes. Nobody commits a decision by hand. Without `--push` it only writes the file in your checkout. It goes **stale** when the ticket, its leaf or epic file, or its prerequisites change, or when `main` changes a path in its `touches`: then the ticket is triaged again. So editing the ticket after `ready-to-spec` or `needs-info` is how you send it back. `python harness/board/triage.py <ref> check` says where a ticket stands.
 
-By hand: in a session on an up-to-date `main` (not a lap worktree), say `triage 1.3`; it offers to record the decision; commit the file to `main`. The dispatcher does it for you (below): while ticket N builds, it triages N+1, so the questions for N+1 reach you before N merges, and it triages N+1 again when N merges and changes its files.
+By hand: in a session on an up-to-date `main` (not a lap worktree), say `triage 1.3`; it offers to record the decision and, on your yes, commits it to `main` for you (`record --push`). The dispatcher does it for you (below): while ticket N builds, it triages N+1, so the questions for N+1 reach you before N merges, and it triages N+1 again when N merges and changes its files.
 
 ## Run laps
 
