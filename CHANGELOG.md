@@ -2,6 +2,16 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-23 — A hand triage is recorded on `main` without a manual commit (from `factory-pilot-2`)
+
+Seen in `factory-pilot-2`, re-testing kit `76aeda9` on ticket 1.2: after a hand triage, `triage.py record` wrote `docs/triage/<ref>.json` into the checkout and the skill told the human to commit it to `main`. That was a step outside the lap and its pull request, and only a commit on `main` lets anything read the decision. The dispatcher already commits its own triages straight to `main`.
+
+- **`harness/board/triage.py`:** `record --push` fetches, checks the decision against `origin/main` and commits `docs/triage/<ref>.json` straight onto `main` from a throwaway detached worktree, so no checkout changes. If `main` moved, it rebases its one commit and pushes again, and it never force-pushes. It refuses any `--rev` other than `origin/main`. Without `--push` it behaves as before.
+- **Shared code:** the commit-to-main helper moved from `dispatch.Repo._commit_to_main` to `triage.commit_to_main`. The dispatcher calls it for triages and for marking tickets done, so both paths commit the same way.
+- **`triage` skill** (both copies): on the human's yes in chat, the agent runs `record --push` and shows the output. It never writes, commits or pushes a decision any other way.
+- **RUNBOOK:** nobody commits a decision by hand any more.
+- **Tests:** `test_triage.py` gains 2 tests: a push to a scratch bare origin that leaves the checkout alone and gives a fresh decision on `origin/main`, and a refused `--rev`.
+
 ## 2026-11-23 — Triage: each ticket's route is decided before its lap (from `factory-pilot-2`)
 
 Seen in `factory-pilot-2`, lap 1.2: the lap stopped halfway for planning. `bmad-build`'s CHECKPOINT 1 waited for a human to approve the plan, so the factory could not build one ticket while the human planned the next. The board's first column read "Backlog — planned" though no ticket in it had a plan. Planning a ticket fully in advance was rejected: its code plan goes stale once the ticket before it merges. The split kept is "settle the intent early, write the code plan at lap time". After warpdotdev-demos/cloud-factory-demo's `triage` skill, with BMAD tickets in place of GitHub issues.
