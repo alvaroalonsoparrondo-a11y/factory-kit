@@ -65,10 +65,19 @@ class Stages(unittest.TestCase):
             s = snap([ticket(1)], {"main": [], "story/1": [plan(1, status)]}, ["story/1"])
             self.assertEqual(row(b.derive(s), 1)["stage"], stage, status)
 
-    def test_built_without_pull_request_asks_for_one(self):
+    def test_built_without_pull_request_is_running_while_active(self):
+        # An active branch in "built" stage means the lap is running gates or runtime
+        # verification — it should not prompt "Open the pull request" yet.
         s = snap([ticket(1)], {"main": [], "story/1": [plan(1, "built")]}, ["story/1"])
         r = row(b.derive(s), 1)
-        self.assertEqual((r["stage"], r["status"]), ("Built", "needs you"))
+        self.assertEqual((r["stage"], r["status"], r["needs_you"]), ("Built", "running", None))
+
+    def test_built_without_pull_request_asks_for_one_when_quiet(self):
+        # Once the branch goes quiet (lap has stalled), prompt the human to open the PR.
+        s = snap([ticket(1)], {"main": [], "story/1": [plan(1, "built")]}, ["story/1"])
+        s["activity"] = {"idle_seconds": {"story/1": 700}, "quiet_seconds": 600}
+        r = row(b.derive(s), 1)
+        self.assertEqual(r["stage"], "Built")
         self.assertEqual(r["needs_you"], "[Open the pull request](https://github.com/o/r/compare/main...story/1?expand=1)")
 
     def test_merged_is_done_and_unlocks_the_next_ticket(self):
