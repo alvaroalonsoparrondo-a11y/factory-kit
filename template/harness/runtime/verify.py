@@ -18,9 +18,10 @@ the test it is judged by. No scenario, or no backend yet: `skipped`.
 `check` prints one word first and exits with its code:
 - `verified` (0): every assertion passed, on the build under test.
 - `failed` (1): a well-formed report shows an assertion failing. It takes a `runtime` round.
-- `inconclusive` (3): something could not be judged (an assertion, the app, the build identity, or the
-  verifier wrote in the checkout). No round: a human looks.
-- `malformed` (4): the report broke the rules (coverage, fields, evidence). Run `start` again once,
+- `inconclusive` (3): something could not be judged (an assertion, the app, the app's own build identity,
+  or the verifier wrote in the checkout). No round: a human looks.
+- `malformed` (4): the report broke the rules (coverage, fields, evidence, or a build identity copied
+  wrong while the app's own was right). Run `start` again once,
   with the reason in the new prompt; a second malformed report is `inconclusive`.
 
 The checker validates coverage, fields, evidence files inside the attempt folder, and the build
@@ -286,6 +287,9 @@ class Verify:
         if now != state.get("porcelain"):
             changed = sorted(set(now.splitlines()) ^ set((state.get("porcelain") or "").splitlines()))
             return self._end(state, "inconclusive", "the verifier wrote in the checkout: " + "; ".join(changed)[:500])
+        expected = state["candidate"]
+        if probe != expected:  # the app under test is not the build that was started: a real wrong-build signal
+            return self._end(state, "inconclusive", f"build identity disagrees: expected {expected}, probe {probe!r}")
         try:
             report = json.loads(Path(state["report"]).read_text(encoding="utf-8"))
         except FileNotFoundError:
@@ -294,16 +298,18 @@ class Verify:
             report, errors = None, [f"the report is not valid JSON: {e}"]
         else:
             errors = self.report_errors(report, [a["id"] for a in state["assertions"]], attempt_dir)
+            if isinstance(report, dict) and isinstance(report.get("candidate"), str) \
+                    and report["candidate"].strip() != expected:
+                # The checker's own probe matched, so the app is right and the verifier copied it wrong.
+                errors.append(f"`candidate` was copied wrong: the app reported {expected!r}, the report has "
+                              f"{report['candidate'].strip()!r}. Save the build identity command's output to a file "
+                              "of its own (no exit code or anything else in it) and copy it exactly")
         if errors:
             reason = "; ".join(errors)[:1500]
             if state["attempt"] < ATTEMPTS:
                 state["feedback"] = reason
                 return self._end(state, "malformed", reason)
             return self._end(state, "inconclusive", f"the report was malformed {ATTEMPTS} times: {reason}")
-        expected = state["candidate"]
-        if report["candidate"].strip() != expected or probe != expected:
-            return self._end(state, "inconclusive", f"build identity disagrees: expected {expected}, probe "
-                                                    f"{probe!r}, report {report['candidate'].strip()!r}")
         state["outcomes"] = [{k: e.get(k) for k in ("id", "outcome", "expected", "observed", "reason", "evidence_path")}
                              for e in report["assertions"]]
         outcomes = {e["outcome"] for e in report["assertions"]}
