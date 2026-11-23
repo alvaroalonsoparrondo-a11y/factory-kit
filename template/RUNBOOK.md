@@ -12,12 +12,14 @@ You drive the factory by hand at three points: you start each lap, you merge the
 2. **Install BMAD v7** in this folder (needs Node and `uv`):
 
    ```bash
-   npx -y skills add bmad-code-org/BMAD-METHOD/skills/core-tools --skill '*' -a claude-code -a kiro-cli -y
+   npx -y skills add bmad-code-org/BMAD-METHOD/skills/core-tools --skill '*' -a claude-code -a kiro-cli -y --copy
    ```
 
    ```bash
-   npx -y skills add bmad-code-org/BMAD-METHOD/skills/method --skill '*' -a claude-code -a kiro-cli -y
+   npx -y skills add bmad-code-org/BMAD-METHOD/skills/method --skill '*' -a claude-code -a kiro-cli -y --copy
    ```
+
+   `--copy` puts real files in `.claude/skills/` and `.kiro/skills/`. Without it, the skills CLI keeps one copy in `.agents/skills/` and links the agents' folders to it; `.agents/` is not committed, so a clone would get broken links. `kit.py doctor` reports linked skill folders.
 
    Then, in an agent session here, say `bmad setup`. Commit what it created (`.claude/skills/`, `.kiro/skills/`, `_bmad/`). Drop `-a kiro-cli` if nobody will use Kiro, or `-a claude-code` if nobody will use Claude Code. The kit was last tested with the BMAD version `bmad setup` reports as `6.13.0-next`; BMAD itself records what it installed in `skills-lock.json`, which is this project's file, not the kit's.
 3. **Check the settings.** `.claude/settings.json` (Claude Code) and `.kiro/agents/factory.json` (Kiro) must exist and parse. Their deny rules are the fence: they stop the agent from editing `MISSION.md`, `FACTORY_RULES.md`, `AGENTS.md`, `CLAUDE.md`, `harness/`, `.github/`, either agent's settings, the `lap` skill and `_bmad/custom/`, and from force-pushing.
@@ -26,15 +28,32 @@ You drive the factory by hand at three points: you start each lap, you merge the
    - Approvals: 1, by someone other than the person who ran the lap. On a one-person trial: 0, because GitHub does not let you approve your own pull request.
    - On a free GitHub plan, branch protection is not enforced on private repositories. The checks still run and show red or green; you have to respect them yourself.
    - Where GitHub Actions is not allowed (see "Without GitHub Actions" below), start the factory judge first; the three checks then report as commit statuses. Without the judge, require the pull request but not the checks: they would never report, so no pull request could merge except by an admin bypassing the rule.
-6. **Keep the factory up to date.** `python ../factory-kit/bin/kit.py status` shows which kit changes this project does not have yet. To take them, see "Taking an update from the kit" in [MODIFYING.md](MODIFYING.md).
+6. **Check what is still open.** `python ../factory-kit/bin/kit.py doctor` checks the fence, then lists each setup step still open, as `open:` lines: GitHub Actions switched off (then see "Without GitHub Actions" below: nothing judges a pull request until you run the judge), a missing label, `main` not protected or not requiring the three checks (or protection not available on your plan), BMAD not installed, no active initiative. It asks GitHub through your `gh` login; `--offline` skips that. `kit.py init` runs it at the end, too. An open step never fails `doctor`, but read each one before you plan.
+7. **Keep the factory up to date.** `python ../factory-kit/bin/kit.py status` shows which kit changes this project does not have yet. To take them, see "Taking an update from the kit" in [MODIFYING.md](MODIFYING.md).
 
 ## Plan the product (BMAD, interactive, in this folder)
 
+`main` takes changes only through pull requests, and a lap reads its ticket and its runtime scenario from `main`. So each planning step below ends in its own pull request, from a branch `planning/<step>` (for example `planning/prd`, `planning/architecture`, `planning/tickets`):
+
+- The agent commits on that branch, cut from `origin/main`, never on `main`. When you say the step is done, it pushes the branch and opens the pull request with `gh` (title `planning: <step>`; the template's Ticket section says `none: planning`; the evidence lines that only apply to a lap can say `n/a`).
+- It is judged like any other pull request. `gates` passes with "no backend yet" until the walking skeleton merges. A planning pull request that touches a protected path (`MISSION.md`) needs `human-judge-change`.
+- Without GitHub Actions, nothing judges it until you run the judge: `python harness/judge/judge.py --once --pr <number>`, and after you merge it, `python harness/judge/judge.py --once` to judge the new `main`.
+
+0. **You** set the active BMAD initiative; the agent cannot, because `_bmad/custom/` is fenced (a personal `*.user.toml` there can override the team's rules, such as the review lenses). Create `_bmad/custom/config.user.toml` with:
+
+   ```toml
+   [core]
+   active_initiative = "initiative-<name>"
+   ```
+
+   `<name>` is the product's short name in kebab-case. Git ignores the file, so do this in every clone you plan in. The initiative's folder and its file are made by the planning skills; if one asks you to set or create an initiative, the line above is the answer. `kit.py doctor` reports a missing initiative.
 1. `bmad-agent-pm` — write the PRD with John. For a first project pick something small: five to eight stories.
 2. **You** fill in `MISSION.md` from the PRD and merge it. The agent is not allowed to.
-3. `bmad-architecture` — it already knows the stack and the runtime contract in `harness/README.md`.
-4. `bmad-agent-po` — Sofia slices the epic into tickets. The first one is the walking skeleton.
-5. Commit the planning documents to `main`.
+3. `bmad-architecture` — it already knows the stack and the runtime contract in `harness/README.md`. The kit's rules make it pin versions from Maven Central and `npm view`, check every property or API an AD names against the pinned version, and add a reviewer for both.
+4. `bmad-agent-po` — Sofia slices the epic into tickets and writes their runtime scenarios (`docs/runtime/`). The first ticket is the walking skeleton. It is the one ticket exempt from the fifteen-minute review size, and its generated starter files go in their own first commit (`starter:`), which the lap's review leaves out.
+5. Merge the last planning pull request. Then run a lap.
+
+The reasons behind decisions live in the documents on `main`: BMAD's decision logs (`.memlog.md`) are working files that Git ignores, so an amended architecture decision carries its reason in the spine itself.
 
 ## Triage: plan the next ticket while the factory builds this one
 
@@ -178,6 +197,7 @@ Per lap: rounds used, by source; which check failed; anything the agent tried to
 
 - The fence here is a guard rail, for both agents. A shell command can still read or write a denied path. The real enforcement is the three required checks.
 - The workflows assume Java 21 + Spring Boot + Maven in `backend/`, Angular in `frontend/`, Playwright in `e2e/`.
+- The `gates` workflow uses Node 22, which comes with npm 10. A recent `ng new` writes `"packageManager": "npm@11…"` into `frontend/package.json`. That is harmless while Corepack is off; if you turn Corepack on, make the two agree.
 
 ## The round budget
 
@@ -211,7 +231,7 @@ Some organisations' GitHub (often GitHub Enterprise) does not allow Actions. Che
 python harness/judge/judge.py --once --pr 12 --port 8180
 ```
 
-The judge checks both guards, then runs the gates on the pull request merged with `main`. It posts the three results on the pull request and prints them in one line. A red `gates` is a fix round the lap does at once, then it runs the judge again, within the lap's round budget ("The round budget" above). So the lap ends in one of two ways: a pull request with three green checks, ready for your review and merge, or a stop that says what it needs from you (a label, a decision, or a judge that could not run). You can run the same command yourself at any time to judge a pull request again. After a merge, `python harness/judge/judge.py --once` judges the new `main`.
+The judge checks both guards, then runs the gates on the pull request merged with `main`. It posts the three results on the pull request and prints them in one line. A red `gates` is a fix round the lap does at once, then it runs the judge again, within the lap's round budget ("The round budget" above). So the lap ends in one of two ways: a pull request with three green checks, ready for your review and merge, or a stop that says what it needs from you (a label, a decision, or a judge that could not run). You can run the same command yourself at any time to judge a pull request again. After a merge, `python harness/judge/judge.py --once` judges the new `main`; the lap does this itself when you tell it `merged` (section C). Planning pull requests are not laps: run the judge on them yourself (see "Plan the product").
 
 The lap's agent cannot change what the judge checks: `harness/` is fenced, and the judge takes it from `main`. Posting a status by hand (`gh api …/statuses/…`) is fenced too. The fence is a guard rail, not a lock, so branch protection and your review stay the last word.
 

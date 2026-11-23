@@ -7,9 +7,11 @@ Standard library only (Python 3.11+). Run it from the project's root, with a clo
   python ../factory-kit/bin/kit.py init --owner <user or team> [--project NAME] [--host HOST]
   python ../factory-kit/bin/kit.py status
   python ../factory-kit/bin/kit.py sync [--adopt <kit revision>] [--discard <file> ...]
-  python ../factory-kit/bin/kit.py doctor
+  python ../factory-kit/bin/kit.py doctor [--offline]
 
 `init` and `sync` write fenced files, so a human runs them. `status` and `doctor` write nothing.
+`doctor` also lists what is still open in the project's setup (GitHub Actions, the labels, branch
+protection, BMAD, the active initiative); `--offline` leaves out the questions to GitHub.
 The design is docs/superpowers/specs/2026-11-22-kit-sync-design.md in factory-kit.
 
 Every file in a project is one of four kinds, by where it lives in the kit:
@@ -47,6 +49,11 @@ SKILL_PAIRS = tuple((f".claude/skills/{n}/SKILL.md", f".kiro/skills/{n}/SKILL.md
 GUARDS = "harness/judge/guards.json"
 CODEOWNERS = ".github/CODEOWNERS"
 PLACEHOLDERS = ("__OWNER__", "__PROJECT__", "__HOST__")
+# What the one-time setup in RUNBOOK.md leaves in place; `doctor` lists what is still open.
+LABELS = ("human-judge-change", "human-approved-irreversible", "human-granted-round")
+REQUIRED_CHECKS = ("gates", "protected-paths", "scope-guard")
+SKILL_DIRS = (".claude/skills", ".kiro/skills")
+BMAD_USER_CONFIG = "_bmad/custom/config.user.toml"
 
 
 class Stop(Exception):
@@ -303,6 +310,108 @@ def adopt_lock(kit, rev):
             "fence": kit.fence(resolved)}
 
 
+# ---------------------------------------------------------------- what the setup still lacks
+
+def gh_api(host, path):
+    """GET `path` from GitHub's API through `gh`: (HTTP status or None, the body as JSON or text).
+    A status of None means `gh` could not ask at all (not installed, not signed in, no network)."""
+    try:
+        done = subprocess.run(["gh", "api", "--hostname", host, path], capture_output=True)
+    except OSError:
+        return None, "gh is not installed"
+    text = done.stdout.decode("utf-8", errors="replace")
+    try:
+        body = json.loads(text) if text.strip() else None
+    except ValueError:
+        body = text
+    if done.returncode == 0:
+        return 200, body
+    err = done.stderr.decode("utf-8", errors="replace").strip()
+    code = re.search(r"HTTP (\d{3})", err)
+    message = body.get("message") if isinstance(body, dict) else None
+    return (int(code.group(1)) if code else None), (message or err.splitlines()[-1] if err else message or "no answer")
+
+
+def github_repo(root):
+    """(host, owner, repo) from the project's `origin`, or None."""
+    url = out(root, "remote", "get-url", "origin", check=False)
+    m = re.match(r"(?:https?://(?:[^@/]+@)?|ssh://(?:[^@/]+@)?|[^@/]+@)([^/:]+)(?::\d+)?[/:]([^/]+)/([^/]+?)(?:\.git)?/?$", url)
+    return m.groups() if m else None
+
+
+def setup_open(root, github=True):
+    """What the project's one-time setup (RUNBOOK.md) still lacks, one line each. Never a failure:
+    a project may run without Actions or branch protection, but someone must know it does."""
+    root = Path(root)
+    opens = []
+    skills = [root / d for d in SKILL_DIRS if (root / d).is_dir()]
+    linked = sorted(f"{p.relative_to(root).as_posix()}" for d in skills for p in d.iterdir() if p.is_symlink())
+    if linked:
+        opens.append(f"{len(linked)} skill folder(s) are symlinks (first: {linked[0]}), most likely into .agents/, "
+                     "which Git ignores: a clone would get broken links. Install BMAD again with `--copy` "
+                     "(RUNBOOK.md, One-time setup, step 2).")
+    if not (root / "_bmad").is_dir() or not any((d / "bmad-build" / "SKILL.md").is_file() for d in skills):
+        opens.append("BMAD is not installed (RUNBOOK.md, One-time setup, step 2).")
+    else:
+        initiative, problem = None, None
+        data = read(root, BMAD_USER_CONFIG)
+        if data:
+            try:
+                import tomllib
+                core = tomllib.loads(data.decode("utf-8")).get("core", {})
+                initiative = core.get("active_initiative") if isinstance(core, dict) else None
+            except (ImportError, ValueError) as e:
+                problem = f"{BMAD_USER_CONFIG} cannot be read ({e})"
+        if problem:
+            opens.append(problem + ".")
+        elif not initiative:
+            opens.append(f"No active BMAD initiative. Before planning, you (not the agent: `_bmad/custom/` is fenced) "
+                         f"put `[core]` and `active_initiative = \"initiative-<name>\"` in {BMAD_USER_CONFIG}. "
+                         "Git ignores it, so every clone needs its own (RUNBOOK.md, Plan the product).")
+    if not github:
+        return opens
+    repo = github_repo(root)
+    if not repo:
+        return opens + ["Could not ask GitHub (no GitHub `origin`): check Actions, the labels and branch protection "
+                        "by hand (RUNBOOK.md, One-time setup)."]
+    host, owner, name = repo
+    base = f"repos/{owner}/{name}"
+    status, body = gh_api(host, f"{base}/actions/permissions")
+    if status is None:
+        return opens + [f"Could not ask GitHub ({body}): check Actions, the labels and branch protection by hand "
+                        "(RUNBOOK.md, One-time setup)."]
+    if status == 200 and isinstance(body, dict) and body.get("enabled") is False:
+        opens.append("GitHub Actions is off for this repository: no workflow runs, so no pull request gets `gates`, "
+                     "`protected-paths` or `scope-guard` until you run the factory judge (`python harness/judge/judge.py "
+                     "--once`). See RUNBOOK.md, Without GitHub Actions. Do not switch Actions on without approval.")
+    elif status != 200:
+        opens.append(f"Could not read whether GitHub Actions may run (HTTP {status}: {body}).")
+    status, body = gh_api(host, f"{base}/labels?per_page=100")
+    if status == 200 and isinstance(body, list):
+        have = {label.get("name") for label in body if isinstance(label, dict)}
+        missing = [label for label in LABELS if label not in have]
+        if missing:
+            opens.append("Missing label(s): " + ", ".join(missing) + " (RUNBOOK.md, One-time setup, step 4).")
+    else:
+        opens.append(f"Could not read the labels (HTTP {status}: {body}).")
+    status, body = gh_api(host, f"{base}/branches/main/protection")
+    if status == 200 and isinstance(body, dict):
+        checks = (body.get("required_status_checks") or {})
+        required = set(checks.get("contexts") or []) | {c.get("context") for c in checks.get("checks") or []}
+        missing = [c for c in REQUIRED_CHECKS if c not in required]
+        if missing:
+            opens.append("`main` is protected but does not require " + ", ".join(missing)
+                         + " (RUNBOOK.md, One-time setup, step 5; without Actions, once the judge has posted them).")
+    elif status == 404:
+        opens.append("`main` is not protected (RUNBOOK.md, One-time setup, step 5).")
+    elif status == 403:
+        opens.append(f"Branch protection is not available here ({body}). On a free plan a private repository's rules "
+                     "are not enforced: the checks still show, and you must respect them yourself.")
+    else:
+        opens.append(f"Could not read branch protection on `main` (HTTP {status}: {body}).")
+    return opens
+
+
 # ---------------------------------------------------------------- doctor
 
 def protected_paths(guards_data):
@@ -313,8 +422,9 @@ def protected_paths(guards_data):
     return [p.replace("\\", "") for p in inner.group(1).split("|")]
 
 
-def doctor(root, kit=None, lock=None, quiet=False):
-    """(failures, warnings) for the project at `root`."""
+def doctor(root, kit=None, lock=None, quiet=False, setup=False, github=True):
+    """(failures, warnings) for the project at `root`. With `setup`, also prints what the project's
+    setup still lacks (`setup_open`); those lines never fail it."""
     failures, warnings = [], []
     guards = read(root, GUARDS)
     paths = protected_paths(guards) if guards else []
@@ -341,13 +451,17 @@ def doctor(root, kit=None, lock=None, quiet=False):
             if not project_owned(rel) and h is not None and digest(read(root, rel)) != h:
                 failures.append(f"{rel} differs from the kit's version. The kit is mature: open an issue in "
                                 f"factory-kit, or run `kit.py sync --discard {rel}`.")
+    opens = setup_open(root, github) if setup and not quiet else []
     if not quiet:
         for w in warnings:
             print(f"warning: {w}")
         for f in failures:
             print(f"FAIL: {f}")
+        for o in opens:
+            print(f"open: {o}")
         print("doctor: " + ("OK" if not failures else f"{len(failures)} failure(s)")
-              + (f", {len(warnings)} warning(s)" if warnings else ""))
+              + (f", {len(warnings)} warning(s)" if warnings else "")
+              + (f", {len(opens)} open setup step(s)" if opens else ""))
     return failures, warnings
 
 
@@ -380,7 +494,7 @@ def cmd_init(kit, project, a):
         write(project.path, rel, text.encode("utf-8"))
     write(project.path, LOCK, (json.dumps(new_lock(kit), indent=2) + "\n").encode())
     print(f"installed the kit at {kit.rev[:7]}: {len(files)} kit files, the fence, {len(kit.seeds())} seeds, {LOCK}")
-    failures, _ = doctor(project.path, kit, None)
+    failures, _ = doctor(project.path, kit, None, setup=True)
     return 1 if failures else 0
 
 
@@ -493,7 +607,7 @@ def pr_body(kit, lock, actions, fence_writes, notes, failures, warnings, adopted
 
 
 def cmd_doctor(kit, project, a):
-    failures, _ = doctor(project.path, kit, project.lock())
+    failures, _ = doctor(project.path, kit, project.lock(), setup=True, github=not a.offline)
     return 1 if failures else 0
 
 
@@ -510,7 +624,8 @@ def main(argv=None):
     s = sub.add_parser("sync", help="take the kit's changes, on a new branch")
     s.add_argument("--adopt", metavar="REV", help="first sync of a project made before kit.py: the kit revision it matches")
     s.add_argument("--discard", metavar="FILE", action="append", help="take the kit's version of this file")
-    sub.add_parser("doctor", help="check the fence, the lap and triage skills and CODEOWNERS")
+    d = sub.add_parser("doctor", help="check the fence, the lap and triage skills and CODEOWNERS; list open setup steps")
+    d.add_argument("--offline", action="store_true", help="do not ask GitHub about Actions, labels or branch protection")
     a = p.parse_args(argv)
     if a.cmd == "init":
         a.project = a.name

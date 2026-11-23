@@ -23,6 +23,53 @@ Seen in `factory-pilot-2`, lap 1.2: the lap stopped halfway for planning. `bmad-
 - **Protected:** the triage skill is a protected path in `FACTORY_RULES.md`, `guards.json`, both fences and the seed `CODEOWNERS`. `kit.py doctor` checks that the Kiro copy matches, as for the lap skill. `docs/triage/` is the project's, like `docs/runtime/`.
 - **Tests:** `test_triage.py` (14, on a scratch repository), 11 dispatcher tests, 5 board tests.
 - **Not done:** the judge and `gates.yml` still compare only the lap skill's two copies; `kit.py doctor` covers the triage skill's.
+## 2026-11-23 — Setup, planning and the skeleton lap, from the first full run (from `factory-pilot-2`)
+
+Seen in the first planning-to-lap run of `factory-pilot-2` (Shortlink), 2026-11-22 to 23, on BMAD `6.13.0-next`. Each item is numbered as in the project's feedback.
+
+- **Setup that nothing reported (1, 3).** GitHub Actions was off, so the first pull request merged with no checks at all; nobody noticed until the second.
+  - **`kit.py doctor`** now ends with `open:` lines for each setup step still open. It asks GitHub, through `gh` and the host and repository from `origin`, whether:
+    - Actions is on (if not, it points to the judge);
+    - the three labels exist;
+    - `main` is protected and requires the three checks (or protection is not available on the plan).
+
+    Locally it checks that BMAD is installed, that an active initiative is set, and that no skill folder is a symlink. These lines never fail `doctor`. `kit.py init` runs it at the end; `--offline` skips GitHub; `sync` asks GitHub nothing.
+  - **The BMAD install** in `RUNBOOK.md` and `AGENT_SETUP.md` adds `--copy`. Without it, the skills CLI keeps the skills in `.agents/skills/` and links the agents' folders to it, which is the untracked `.agents/` (528 files) the pilot found. Ignoring `.agents/` alone would commit broken links on Linux and macOS (tried: the default install makes `.claude/skills/bmad` a symlink; `--copy` makes no `.agents/`). `.agents/` is added to the template's `.gitignore` as well.
+  - **`AGENT_SETUP.md`** reports each `open:` line.
+- **The active initiative is behind the fence (2).** `bmad-architecture` needs `active_initiative` in `_bmad/custom/config.user.toml`; the agent may not write there, so the person had to step in mid-flow. The fence stays: a personal `*.user.toml` can override the team's rules (`review = "none"` would drop the review lenses). Instead, `RUNBOOK.md` "Plan the product" starts with step 0: the person writes the two lines. `doctor` reports it while it is missing.
+- **Architecture decisions that the framework cannot do (4, 5, 6).** Four reviewers missed that no `spring.jackson.*` property makes a String field refuse a number (AD-18). Web search gave wrong latest versions and an artifact that is only a relocation POM. AD-10 gave work to the walking skeleton that a later story owns. `bmad-architecture.toml` now has four more facts:
+  - pin versions only from Maven Central metadata and `npm view`;
+  - check every setting, property or API an AD names against the pinned version (configuration metadata, Javadoc or a throwaway test), and say how;
+  - name a rule's owner as "the story that first adds X";
+  - an amended AD keeps its reason in the spine, because `.memlog.md` is not committed.
+
+  It also has a fourth `finalize_reviewers` entry, appended to BMAD's two, that checks versions and named APIs.
+- **The planning pull-request path (7, 11).** The tickets and scenarios must be on `main` before a lap, `main` takes only pull requests, and BMAD's board rules say never push. Changes:
+  - `RUNBOOK.md` now says each planning step is a `planning/<step>` branch and pull request, with no ticket, judged like any other.
+  - `bmad-agent-po.toml` lets the product owner push `planning/` branches and open their pull request.
+  - Without Actions, the runbook says to run `judge.py --once` on planning pull requests and on `main` after a merge.
+  - The lap's section C now judges `main` itself after a merge when Actions is off.
+- **The walking skeleton (8, 9).** The skeleton never fits the fifteen-minute rule, and its review read 108 kB, mostly generated Spring, Angular and Playwright files. The blind reviewer's floor (`min(floor(sqrt(kB)+1), 10)`) then asked for 10 findings: 25 found, 14 rejected.
+  - `bmad-agent-po.toml` exempts the skeleton from the size rule.
+  - Generated starter files go in their own first commit (`starter:`). `bmad-build.toml` makes the plan do that, and writes the review diff from that commit, leaving out lockfiles, so the floor follows the hand-written size. BMAD's lenses are not forked.
+- **A gated candidate that was not committed (10).** The local gates ran before `bmad-build` committed, so the candidate named the parent of the code tested.
+  - Lap step A7 (both copies) now requires a clean tree before every gate run, and commits what `bmad-build` left.
+  - `run-gates.sh`, when it names its own candidate (local runs only; CI and the judge always set one), warns about uncommitted changes and calls the candidate `<sha>-dirty-local`. No check is weaker; the identity check compares the same value as before.
+- **Smaller items.**
+  - `RUNBOOK.md` notes the npm 10 (Node 22 gates) and `packageManager: npm@11` mismatch.
+  - `bmad-agent-po.toml` checks that containers have no story-only frontmatter (`id`, `tracker_id` on the repo store).
+  - Not changed: whether to approve npm 11's install scripts (esbuild, lmdb). The pilot's build passes without them, and that is a decision for the owner.
+
+Tested on Linux:
+- `kit.py`: 35 tests, 12 new. They cover each open line with a stand-in for GitHub's answers, `gh_api` reading a stand-in `gh`, `--offline`, and that `sync` asks GitHub nothing.
+- Harness tests pass: board 74, dispatch 53 (1 skipped), judge 53 (3 skipped), runtime 15. The two lap skills are identical.
+- In a scratch project: `kit.py init`, then the new `--copy` install and `bmad setup` (BMAD `6.13.0-next`). `resolve_customization.py` merges all three changed TOML files (architecture 9 facts and 3 reviewers, build 10 facts, PO 13 facts). `doctor --offline` reports the missing initiative, and then nothing once it is set.
+
+Not tested:
+- `doctor` against real GitHub answers (the parsing is tested against a stand-in `gh`).
+- Windows.
+- A lap with the new facts.
+- `calibrate.sh` (it needs a backend). The change to `run-gates.sh` only names the local candidate.
 
 ## 2026-11-23 — Dashboard: ticket no longer shows in "Needs you" during runtime verification
 

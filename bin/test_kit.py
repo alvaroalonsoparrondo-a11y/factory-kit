@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -239,6 +240,134 @@ class FenceTests(Base):
         self.assertIn("warning: .github/CODEOWNERS has no line for /harness/", text)
         (self.proj / ".kiro/skills/lap/SKILL.md").write_text("drifted\n")
         self.assertEqual(self.run_kit("doctor")[0], 1)
+
+
+class SetupTests(Base):
+    """`doctor` lists what the one-time setup still lacks, and never fails on it (factory-pilot-2, item 1)."""
+
+    def setUp(self):
+        super().setUp()
+        self.init()
+        git(self.proj, "remote", "add", "origin", "https://github.com/alice/shop.git")
+        self.answers = {
+            "repos/alice/shop/actions/permissions": (200, {"enabled": True}),
+            "repos/alice/shop/labels?per_page=100": (200, [{"name": n} for n in kit.LABELS]),
+            "repos/alice/shop/branches/main/protection":
+                (200, {"required_status_checks": {"contexts": list(kit.REQUIRED_CHECKS)}}),
+        }
+        self.asked = []
+
+        def fake(host, path):
+            self.asked.append((host, path))
+            return self.answers[path]
+        fake.__wrapped__ = kit.gh_api
+        patcher = mock.patch.object(kit, "gh_api", fake)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def install_bmad(self, initiative=None):
+        (self.proj / "_bmad").mkdir(exist_ok=True)
+        (self.proj / ".claude/skills/bmad-build").mkdir(parents=True)
+        (self.proj / ".claude/skills/bmad-build/SKILL.md").write_text("bmad\n")
+        if initiative:
+            (self.proj / kit.BMAD_USER_CONFIG).write_text(f'[core]\nactive_initiative = "{initiative}"\n')
+
+    def opens(self, *args):
+        code, text = self.run_kit("doctor", *args)
+        self.assertEqual(code, 0, text)
+        return [line for line in text.splitlines() if line.startswith("open: ")]
+
+    def test_a_complete_setup_has_nothing_open(self):
+        self.install_bmad("initiative-shop")
+        self.assertEqual(self.opens(), [])
+        self.assertEqual(self.asked[0][0], "github.com")
+
+    def test_actions_off_points_to_the_judge(self):
+        self.install_bmad("initiative-shop")
+        self.answers["repos/alice/shop/actions/permissions"] = (200, {"enabled": False})
+        opens = self.opens()
+        self.assertEqual(len(opens), 1, opens)
+        self.assertIn("GitHub Actions is off", opens[0])
+        self.assertIn("Without GitHub Actions", opens[0])
+
+    def test_missing_labels_and_protection(self):
+        self.install_bmad("initiative-shop")
+        self.answers["repos/alice/shop/labels?per_page=100"] = (200, [{"name": "human-judge-change"}])
+        self.answers["repos/alice/shop/branches/main/protection"] = (404, "Branch not protected")
+        opens = " ".join(self.opens())
+        self.assertIn("human-approved-irreversible, human-granted-round", opens)
+        self.assertIn("`main` is not protected", opens)
+
+    def test_protection_not_available_on_the_plan(self):
+        self.install_bmad("initiative-shop")
+        self.answers["repos/alice/shop/branches/main/protection"] = (403, "Upgrade to GitHub Pro")
+        self.assertIn("not enforced", " ".join(self.opens()))
+
+    def test_protection_without_the_three_checks(self):
+        self.install_bmad("initiative-shop")
+        self.answers["repos/alice/shop/branches/main/protection"] = (
+            200, {"required_status_checks": {"contexts": [], "checks": [{"context": "gates"}]}})
+        self.assertIn("does not require protected-paths, scope-guard", " ".join(self.opens()))
+
+    def test_no_bmad_then_no_initiative(self):
+        self.assertIn("BMAD is not installed", " ".join(self.opens()))
+        self.install_bmad()
+        opens = " ".join(self.opens())
+        self.assertIn("No active BMAD initiative", opens)
+        self.assertIn(kit.BMAD_USER_CONFIG, opens)
+        (self.proj / kit.BMAD_USER_CONFIG).write_text('[core]\nactive_initiative = "initiative-shop"\n')
+        self.assertEqual(self.opens(), [])
+
+    @unittest.skipIf(os.name == "nt", "symlinks need privileges on Windows")
+    def test_symlinked_skills_are_open(self):
+        self.install_bmad("initiative-shop")
+        (self.proj / ".agents/skills/bmad").mkdir(parents=True)
+        os.symlink("../../.agents/skills/bmad", self.proj / ".claude/skills/bmad")
+        self.assertIn("--copy", " ".join(self.opens()))
+
+    def test_gh_that_cannot_ask_is_one_open_line(self):
+        self.install_bmad("initiative-shop")
+        for path in self.answers:
+            self.answers[path] = (None, "gh is not installed")
+        opens = self.opens()
+        self.assertEqual(len(opens), 1, opens)
+        self.assertIn("Could not ask GitHub (gh is not installed)", opens[0])
+
+    def test_offline_asks_nothing(self):
+        self.install_bmad("initiative-shop")
+        self.assertEqual(self.opens("--offline"), [])
+        self.assertEqual(self.asked, [])
+
+    def test_origin_forms(self):
+        for url, want in (("https://github.com/alice/shop.git", ("github.com", "alice", "shop")),
+                          ("git@github.example.com:team/shop.git", ("github.example.com", "team", "shop")),
+                          ("ssh://git@github.com/alice/shop", ("github.com", "alice", "shop"))):
+            git(self.proj, "remote", "set-url", "origin", url)
+            self.assertEqual(kit.github_repo(self.proj), want)
+
+    @unittest.skipIf(os.name == "nt", "the stand-in gh is a shell script")
+    def test_gh_api_reads_gh_answers(self):
+        bindir = self.tmp / "fakebin"
+        bindir.mkdir()
+        (bindir / "gh").write_text(
+            "#!/bin/sh\n"
+            'case "$4" in\n'
+            '  ok) echo \'{"enabled": false}\' ;;\n'
+            '  missing) echo \'{"message":"Branch not protected","status":"404"}\'; '
+            'echo "gh: Branch not protected (HTTP 404)" >&2; exit 1 ;;\n'
+            '  *) echo "To get started with GitHub CLI, please run:  gh auth login" >&2; exit 4 ;;\n'
+            "esac\n")
+        (bindir / "gh").chmod(0o755)
+        with mock.patch.dict(os.environ, {"PATH": f"{bindir}{os.pathsep}{os.environ['PATH']}"}):
+            self.assertEqual(kit.gh_api.__wrapped__("github.com", "ok"), (200, {"enabled": False}))
+            self.assertEqual(kit.gh_api.__wrapped__("github.com", "missing"), (404, "Branch not protected"))
+            status, why = kit.gh_api.__wrapped__("github.com", "other")
+            self.assertIsNone(status)
+            self.assertIn("gh auth login", why)
+
+    def test_sync_asks_github_nothing(self):
+        self.run_kit("sync")
+        self.assertEqual(self.asked, [])
 
 
 class SmallTests(Base):
