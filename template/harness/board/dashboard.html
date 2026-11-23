@@ -190,7 +190,7 @@ function column(r) {
   if (r.status === 'blocked' || r.waiting_for_you || (r.needs_you && r.stage !== 'Planned')) return 'human'
   if (r.stage === 'Planned') return 'backlog'
   if (r.stage === 'In CI') return 'ci'
-  if (r.stage === 'In review' || r.stage === 'Built') return 'review'
+  if (r.stage === 'In review') return 'review'
   return 'build'
 }
 

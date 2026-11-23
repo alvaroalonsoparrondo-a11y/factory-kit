@@ -2,6 +2,14 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-23 — Dashboard: ticket no longer shows in "Needs you" during runtime verification
+
+Seen: while `serve.py` reads plan files from the working tree, a ticket with `plan_status = "built"` (BMAD review just committed locally) appeared in the **"Needs you"** column with an "Open the pull request" hint for the entire duration of local gates + runtime verification — before the lap had pushed anything. The board could not tell a running lap from a stalled one.
+
+- **`harness/board/board.py`, `_needs_you`:** moved the "Built → Open the pull request" prompt inside the `quiet_minutes is not None` branch. The prompt now fires only when the branch has gone quiet (lap stalled). An active "Built" branch returns `None` from `_needs_you`, so the ticket stays in the **Build** column while the lap runs gates and runtime verification.
+- **`harness/board/dashboard.html`, `column()`:** removed `r.stage === 'Built'` from the "review" column check. With `needs_you` now `None` for an active "Built" ticket, it falls through to `return 'build'` instead of "review".
+- **`harness/board/test_board.py`:** replaced `test_built_without_pull_request_asks_for_one` with two tests: one for the active case (running, Build column) and one for the quiet case (stalled, Open the pull request hint).
+
 ## 2026-11-22 — `kit.py`: one command installs the factory, one keeps it up to date (from `factory-pilot`)
 
 Seen bringing `factory-pilot` up to the kit (factory-pilot#13, #14). 10 of 11 kit commits conflicted on cherry-pick, because a project's factory files were edited copies. The kit-only files and the fence had to be sorted out by hand. Real names had to be put back over placeholders. `RUNBOOK.md` and the two changelogs were merged by hand. 38 fenced files were staged for a human to copy. Design: [docs/superpowers/specs/2026-11-22-kit-sync-design.md](docs/superpowers/specs/2026-11-22-kit-sync-design.md) (#17), after coleam00/ai-software-factory's `template/` and `init`.

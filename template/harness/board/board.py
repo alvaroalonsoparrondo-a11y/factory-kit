@@ -494,6 +494,9 @@ def _needs_you(r, snapshot):
     if r["blocked"]:
         return f"Decide: {r['blocked']}"
     if r["quiet_minutes"] is not None:
+        if r["stage"] == "Built":
+            link = f"{snapshot.get('server', 'https://github.com')}/{snapshot['repo']}/compare/main...{r['branch']}?expand=1"
+            return f"[Open the pull request]({link})"
         return f"Quiet for {r['quiet_minutes']} min: look at the session"
     if r["stage"] == "PR closed":
         return "Closed without merge: decide what happens to the ticket"
@@ -510,9 +513,6 @@ def _needs_you(r, snapshot):
         if missing and not any(checks[c] == "running" for c in CHECKS):
             return "A required check has not reported: " + ", ".join(missing)
         return None
-    if r["stage"] == "Built":
-        link = f"{snapshot.get('server', 'https://github.com')}/{snapshot['repo']}/compare/main...{r['branch']}?expand=1"
-        return f"[Open the pull request]({link})"
     return None
 
 
