@@ -12,6 +12,10 @@ __pycache__/
 # Pull request text the lap writes (never committed)
 .lap/
 
+# The skills CLI's shared copy of the BMAD skills. Install with --copy (RUNBOOK.md, step 2) and
+# Claude Code and Kiro read their own folders; without --copy they are links into here.
+.agents/
+
 # BMAD facilitation working files
 .memlog.md
 .template.md
