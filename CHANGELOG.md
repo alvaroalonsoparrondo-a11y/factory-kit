@@ -10,6 +10,7 @@ Seen in `factory-pilot-2`, re-testing kit `76aeda9` on ticket 1.2: after a hand 
 - **Shared code:** the commit-to-main helper moved from `dispatch.Repo._commit_to_main` to `triage.commit_to_main`. The dispatcher calls it for triages and for marking tickets done, so both paths commit the same way.
 - **`triage` skill** (both copies): on the human's yes in chat, the agent runs `record --push` and shows the output. It never writes, commits or pushes a decision any other way.
 - **RUNBOOK:** nobody commits a decision by hand any more.
+- **Dispatcher message and RUNBOOK:** the `--no-agents` ask in `dispatch.py` and the RUNBOOK's "by hand" line still said to commit the file; both now use `record --push`.
 - **Tests:** `test_triage.py` gains 2 tests: a push to a scratch bare origin that leaves the checkout alone and gives a fresh decision on `origin/main`, and a refused `--rev`.
 
 ## 2026-11-23 — Triage: each ticket's route is decided before its lap (from `factory-pilot-2`)

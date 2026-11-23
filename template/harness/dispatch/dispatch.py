@@ -694,8 +694,8 @@ class Dispatcher:
             return  # running, or waiting out a usage limit: _finish_triage reported it
         if not self.agents:
             rep["needs_you"].append((ref, f"{what}{why}: say `triage {ref}` in a session on main, record it with "
-                                          f"`python harness/board/triage.py {ref} record <answer file>` and commit "
-                                          f"{triage.record_path(ref)} to main"))
+                                          f"`python harness/board/triage.py {ref} record <answer file> --push` "
+                                          f"(it commits {triage.record_path(ref)} to main for you)"))
             return
         if not self.headless_ok:
             return
