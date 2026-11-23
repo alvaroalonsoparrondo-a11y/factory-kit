@@ -102,6 +102,6 @@ Your final message is one raw JSON object, with no prose before or after it and 
 
 Headless (`FACTORY_DISPATCHED=1`): stop after step 5. The dispatcher records the decision.
 
-By hand: after the answer, offer to record it. On yes, save the JSON object to `.lap/<ref>-triage.json` and run `python harness/board/triage.py <ref> record .lap/<ref>-triage.json`. It checks the decision, stamps it with `origin/main` and a fingerprint of the ticket, and writes `docs/triage/<ref>.json`. Show its output. The human commits that file to `main`; never commit or push it yourself.
+By hand: after the answer, offer to record it. On the human's yes in chat, save the JSON object to `.lap/<ref>-triage.json` and run `python harness/board/triage.py <ref> record .lap/<ref>-triage.json --push`. It fetches, checks the decision, stamps it with `origin/main` and a fingerprint of the ticket, and commits `docs/triage/<ref>.json` straight onto `main` from a throwaway worktree, as the dispatcher does; this checkout does not change. Show its output. Run it only after that yes, and never write, commit or push a decision any other way. If it is refused, show why and stop.
 
 A recorded decision goes stale when the ticket, its epic file or its prerequisites change, or when `main` changes a path in its `touches`; `triage.py <ref> check` says so, and the ticket is triaged again.
