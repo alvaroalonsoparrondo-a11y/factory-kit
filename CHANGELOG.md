@@ -19,6 +19,25 @@ Seen in `factory-pilot-2`, reviewing the board after triage landed: CI's `BOARD.
 - **Tests:** 5 board tests, 3 triage tests.
 - **Not checked visually:** with real decisions. `factory-pilot-2` has none on `main`, so the page was checked with a fake board fed to the dashboard in the browser.
 
+## 2026-11-23 — The product owner reports each ticket's triage (from `factory-pilot-2`)
+
+Seen in `factory-pilot-2` while re-testing kit `76aeda9`: a triage decision and a BMAD ticket `status` are separate, and only the factory's board and dispatcher read both. `tickets.py` and the product owner (Sofia) never read `docs/triage/`, so "what's ready" or `next` could offer a ticket that triage had sent to `needs-info` or `wait`.
+
+- **`_bmad/custom/bmad-agent-po.toml`:** one more persistent fact. Whenever Sofia says which tickets are ready or next, she runs `triage.py <ref> check` for each one and shows the answer. Only a fresh `ready-to-implement` counts as ready for a lap. `none` or `stale` means triage it first. `ready-to-spec` and `needs-info` list their questions and offer `refine <ref>`, and `wait` gives its summary. After a refine she says the ticket needs triage again, since its decision goes stale.
+- **One writer each:** Sofia never writes, changes or deletes a decision, and never sets a ticket `status` from one. Triage still never writes a BMAD `status`.
+- **Not done:** `tickets.py` itself still knows nothing of triage. The change is in Sofia's instructions, not in BMAD's script.
+
+## 2026-11-23 — A hand triage is recorded on `main` without a manual commit (from `factory-pilot-2`)
+
+Seen in `factory-pilot-2`, re-testing kit `76aeda9` on ticket 1.2: after a hand triage, `triage.py record` wrote `docs/triage/<ref>.json` into the checkout and the skill told the human to commit it to `main`. That was a step outside the lap and its pull request, and only a commit on `main` lets anything read the decision. The dispatcher already commits its own triages straight to `main`.
+
+- **`harness/board/triage.py`:** `record --push` fetches, checks the decision against `origin/main` and commits `docs/triage/<ref>.json` straight onto `main` from a throwaway detached worktree, so no checkout changes. If `main` moved, it rebases its one commit and pushes again, and it never force-pushes. It refuses any `--rev` other than `origin/main`. Without `--push` it behaves as before.
+- **Shared code:** the commit-to-main helper moved from `dispatch.Repo._commit_to_main` to `triage.commit_to_main`. The dispatcher calls it for triages and for marking tickets done, so both paths commit the same way.
+- **`triage` skill** (both copies): on the human's yes in chat, the agent runs `record --push` and shows the output. It never writes, commits or pushes a decision any other way.
+- **RUNBOOK:** nobody commits a decision by hand any more.
+- **Dispatcher message and RUNBOOK:** the `--no-agents` ask in `dispatch.py` and the RUNBOOK's "by hand" line still said to commit the file; both now use `record --push`.
+- **Tests:** `test_triage.py` gains 2 tests: a push to a scratch bare origin that leaves the checkout alone and gives a fresh decision on `origin/main`, and a refused `--rev`.
+
 ## 2026-11-23 — Triage: each ticket's route is decided before its lap (from `factory-pilot-2`)
 
 Seen in `factory-pilot-2`, lap 1.2: the lap stopped halfway for planning. `bmad-build`'s CHECKPOINT 1 waited for a human to approve the plan, so the factory could not build one ticket while the human planned the next. The board's first column read "Backlog — planned" though no ticket in it had a plan. Planning a ticket fully in advance was rejected: its code plan goes stale once the ticket before it merges. The split kept is "settle the intent early, write the code plan at lap time". After warpdotdev-demos/cloud-factory-demo's `triage` skill, with BMAD tickets in place of GitHub issues.

@@ -179,6 +179,34 @@ class Triage(unittest.TestCase):
         lines = self.run_cli("check")[1].splitlines()
         self.assertEqual(lines[:2], ["fresh ready-to-implement", "plan: the lap approves it"])
 
+    def test_record_push_commits_onto_main_and_leaves_the_checkout_alone(self):
+        origin = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, origin, ignore_errors=True)
+        subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+        self.git("remote", "add", "origin", str(origin))
+        self.git("push", "-q", "origin", "main")
+        answer = self.root / "answer.json"
+        answer.write_text(json.dumps(READY), encoding="utf-8")
+        script = str(Path(tr.__file__).resolve())
+        done = subprocess.run([sys.executable, script, "2", "record", str(answer), "--push"], cwd=self.root,
+                              capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("recorded ready-to-implement for 2 on main at", done.stdout)
+        self.assertFalse((self.root / "docs/triage/2.json").exists())  # nothing written in this checkout
+        self.assertEqual(self.git("worktree", "list").count("\n"), 1)  # the throwaway worktree is gone
+        self.git("fetch", "-q", "origin")
+        self.assertIn("Triage ticket 2: ready-to-implement", self.git("log", "-1", "--format=%B", "origin/main"))
+        ticket, plans = tr._load(str(self.root), "origin/main", "2")
+        rec = tr.read_record(str(self.root), "origin/main", "2")
+        self.assertEqual(tr.freshness(str(self.root), "origin/main", rec, ticket, plans), (True, ""))
+
+    def test_record_push_refuses_another_rev(self):
+        answer = self.root / "answer.json"
+        answer.write_text(json.dumps(READY), encoding="utf-8")
+        code, out = self.run_cli("record", str(answer), "--push")
+        self.assertEqual(code, 1)
+        self.assertTrue(out.startswith("refused: --push records against origin/main"))
+
     def test_record_refuses_a_bad_decision(self):
         answer = self.root / "bad.json"
         answer.write_text(json.dumps({"state": "needs-info", "summary": "x"}), encoding="utf-8")

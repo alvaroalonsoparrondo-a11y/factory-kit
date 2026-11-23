@@ -6,12 +6,15 @@ Standard library only (Python 3.11+).
 
   python harness/board/triage.py <ref> check                 none | fresh <state> | stale <state>: <why>
   python harness/board/triage.py <ref> record <decision.json>  check a decision and write docs/triage/<ref>.json
+  python harness/board/triage.py <ref> record <decision.json> --push   ... and commit it straight onto main
 
 A decision comes from the `triage` skill: one JSON object with `state`, `summary`, `rationale`,
 `questions` and `next_step`. `record` checks it, stamps it with the commit of `origin/main` and a
-fingerprint of the ticket, and writes `docs/triage/<ref>.json` in this checkout; a human (or the
-dispatcher) commits it to `main`. Everything is read from `origin/main` (`--rev` to change), so a
-branch's copy of a decision never counts.
+fingerprint of the ticket, and writes `docs/triage/<ref>.json` in this checkout. With `--push` it
+fetches first and commits the file straight onto `main` from a throwaway worktree instead, the way
+the dispatcher records its triages, so no checkout changes and nobody commits it by hand.
+Everything is read from `origin/main` (`--rev` to change), so a branch's copy of a decision never
+counts.
 
 A decision goes stale when, on main since it was made:
 - the ticket's entry, its leaf file or its epic file changed (Sofia refined it, a decision landed);
@@ -30,6 +33,7 @@ import json
 import posixpath
 import subprocess
 import sys
+import tempfile
 import tomllib
 from pathlib import Path
 
@@ -177,6 +181,35 @@ def write_record(folder, record):
     return path
 
 
+def commit_to_main(root, prefix, change, folder, message):
+    """Run `change(tmp)` in a throwaway detached worktree of origin/main, commit what it changed under
+    `folder` and push it straight onto main, so no checkout is disturbed. Never force-pushes; when main
+    moved meanwhile, rebases the one unpushed commit and pushes again. The new main commit, or None when
+    nothing changed. Shared by `record --push` and the dispatcher."""
+    def run(*args, cwd, check=True):
+        done = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8")
+        if check and done.returncode != 0:
+            raise RuntimeError(f"git {' '.join(args)}: {done.stderr.strip()}")
+        return done
+
+    tmp = Path(tempfile.mkdtemp(prefix=prefix))
+    tmp.rmdir()
+    run("worktree", "add", "--quiet", "--detach", str(tmp), "origin/main", cwd=root)
+    try:
+        change(tmp)
+        run("add", "-A", folder, cwd=tmp)
+        if not run("diff", "--cached", "--quiet", cwd=tmp, check=False).returncode:
+            return None  # nothing changed
+        run("commit", "--quiet", "-m", message, cwd=tmp)
+        if run("push", "--quiet", "origin", "HEAD:main", cwd=tmp, check=False).returncode:
+            run("fetch", "--quiet", "origin", cwd=tmp)
+            run("rebase", "--quiet", "origin/main", cwd=tmp)  # one local, unpushed commit
+            run("push", "--quiet", "origin", "HEAD:main", cwd=tmp)
+        return run("rev-parse", "HEAD", cwd=tmp).stdout.strip()
+    finally:
+        run("worktree", "remove", "--force", str(tmp), cwd=root, check=False)
+
+
 def read_record(root, rev, ref):
     text = git(root, "show", f"{rev}:{record_path(ref)}", check=False)
     if not text:
@@ -251,8 +284,16 @@ def main(argv=None):
     sub.add_parser("check", help="none | fresh <state> | stale <state>: <why>")
     r = sub.add_parser("record", help="check a decision and write docs/triage/<ref>.json here")
     r.add_argument("decision", help="a file with the triage skill's JSON answer")
+    r.add_argument("--push", action="store_true",
+                   help="fetch, then commit the decision straight onto main instead of writing it here")
     args = ap.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
+    push = args.cmd == "record" and args.push
+    if push:
+        if args.rev != "origin/main":
+            print("refused: --push records against origin/main; leave out --rev")
+            return 1
+        git(args.root, "fetch", "--quiet", "origin")
     ticket, plans = _load(args.root, args.rev, args.ref)
 
     if args.cmd == "check":
@@ -281,6 +322,18 @@ def main(argv=None):
     except (OSError, ValueError) as e:
         print(f"refused: {e}")
         return 1
+    if push:
+        try:
+            sha = commit_to_main(args.root, f"triage-{args.ref}-", lambda tmp: write_record(tmp, rec), RECORD_DIR,
+                                 f"Triage ticket {args.ref}: {rec['state']}\n\nRecorded with triage.py record --push.")
+        except RuntimeError as e:
+            print(f"refused: could not push to main: {e}")
+            return 1
+        if sha is None:
+            print(f"unchanged: main already has this decision for {args.ref} ({record_path(args.ref)})")
+        else:
+            print(f"recorded {rec['state']} for {args.ref} on main at {sha[:7]}: {record_path(args.ref)}")
+        return 0
     path = write_record(args.root, rec)
     print(f"recorded {rec['state']} for {args.ref} at {rec['main_sha'][:7]}: {path}")
     print("Commit it to main; until then nothing reads it.")
