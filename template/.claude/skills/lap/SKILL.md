@@ -30,7 +30,7 @@ Hard rules for the whole lap (from `FACTORY_RULES.md`):
 4. **Branch.** `git switch -c story/<ticket-id> origin/main`, then `git push -u origin story/<ticket-id>` at once. The board now shows the lap as started.
 5. **Irreversible check.** If the ticket needs anything in `FACTORY_RULES.md` section 1 or a protected path, stop. Do not build a partial version. Make the stop visible on the board: ask the product owner skill (`bmad-agent-po`, BOARD) to mark the ticket blocked with the rule as the reason (`tickets.py mark <ref> draft --blocked "<rule and why>"`), commit, `git push`. Then tell the user which rule applies.
 6. **Build with BMAD.** Invoke the `bmad-build` skill with the ticket. Follow its workflow fully, including its review step. It commits locally. It must not push. One push is yours: when the plan is approved, commit the plan file if `bmad-build` has not, and `git push`, so the board shows the ticket as building. Then let `bmad-build` continue. Each of its review loopbacks takes a round first (source `review`); `_bmad/custom/bmad-build.toml` tells it so, and when `take` refuses, `bmad-build` halts and the lap stops.
-7. **Local gates.** Run `PORT=<port> bash harness/run-gates.sh > .lap/<ticket-id>-gates.log 2>&1`, then read its exit status and the log.
+7. **Local gates.** First, everything is committed: `git status --porcelain` must print nothing, so the candidate the gates print is the commit they tested. If `bmad-build` left changes (its last step commits them; review patches come before it), commit them now with the plan's title. Then run `PORT=<port> bash harness/run-gates.sh > .lap/<ticket-id>-gates.log 2>&1`, and read its exit status and the log. Do the same before every later run of the gates in this lap.
    - Green (exit 0): go on.
    - Red: ask why, never guess: `python harness/judge/classify.py .lap/<ticket-id>-gates.log --check-main --port <port + 100>`. It prints one word first:
      - `introduced`: the change caused it. Take a round (`take gates "<the failing check and line>"`), fix the cause in application or test code, run the gates again.
@@ -87,6 +87,7 @@ A dispatched lap skips this section: the dispatcher marks the ticket done on `ma
 2. Ask the product owner skill (`bmad-agent-po`, BOARD) to mark the ticket done, and commit it.
    - Main checkout: `git push`.
    - Worktree: `git push origin HEAD:main`. If it is refused because `main` moved, `git fetch origin && git rebase origin/main` (one local commit, not yet pushed) and push again. Never force-push.
+   - Without GitHub Actions (`"enabled": false`, as in step A9): nothing judges the new `main` by itself. Run `python harness/judge/judge.py --once --port <port + 100>`, which judges `main` after the merge, and include its line in the report below. If it fails or `main` is red, say so in the report; do not fix it in this lap.
 3. Report one line: ticket, rounds used (`python harness/board/lap_round.py <ticket-id> status`), which checks had failed on the way. In a worktree, also say the worktree can now be removed (`git worktree remove <path>`; in the Claude desktop app, archiving its session does it).
 
 ## D. Main moved (the branch is behind `origin/main`)

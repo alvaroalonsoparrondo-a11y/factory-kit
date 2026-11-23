@@ -77,12 +77,14 @@ Commit ("Install the factory from the kit at <commit>") and push: `git push -u o
 Install for the agents in AGENTS only: one `-a` per agent (`-a claude-code`, `-a kiro-cli`).
 
 ```bash
-npx -y skills add bmad-code-org/BMAD-METHOD/skills/core-tools --skill '*' -a claude-code -a kiro-cli -y
-npx -y skills add bmad-code-org/BMAD-METHOD/skills/method --skill '*' -a claude-code -a kiro-cli -y
+npx -y skills add bmad-code-org/BMAD-METHOD/skills/core-tools --skill '*' -a claude-code -a kiro-cli -y --copy
+npx -y skills add bmad-code-org/BMAD-METHOD/skills/method --skill '*' -a claude-code -a kiro-cli -y --copy
 uv run --no-cache SKILLS/bmad/scripts/setup.py --project-root . --skill SKILLS/bmad --root SKILLS
 ```
 
 `SKILLS` is `.claude/skills` when AGENTS includes `claude-code`, else `.kiro/skills`.
+
+Keep `--copy`: without it the skill folders are symlinks into `.agents/skills/`, which the project's `.gitignore` leaves out, so a clone would get broken links. With it, no `.agents/` folder is made.
 
 The setup command prints JSON. It must show `"current": true` and an empty `"problems"` list (`"status"` may be `created` or `repaired`; both are fine). If it lists pending questions, ask the person; do not invent answers. Note the `version` it reports for your report.
 
@@ -92,7 +94,7 @@ The setup command prints JSON. It must show `"current": true` and an empty `"pro
 uv run --no-cache _bmad/scripts/resolve_customization.py --skill SKILLS/bmad-build --project-root . --key workflow
 ```
 
-The output must contain the review lens id `factory-judge`, `"review": "thorough"`, and `MISSION.md` among `persistent_facts`. Also check that `.claude/skills/lap/SKILL.md` and `.kiro/skills/lap/SKILL.md` still exist and are unchanged (`git status` shows them clean). With both agents, `.kiro/skills/` holds the same BMAD skills as `.claude/skills/`; with one, the other agent's folder holds only `lap`.
+The output must contain the review lens id `factory-judge`, `"review": "thorough"`, and `MISSION.md` among `persistent_facts`. Also check that no folder under SKILLS is a symlink, and that `.claude/skills/lap/SKILL.md` and `.kiro/skills/lap/SKILL.md` still exist and are unchanged (`git status` shows them clean). With both agents, `.kiro/skills/` holds the same BMAD skills as `.claude/skills/`; with one, the other agent's folder holds only `lap`.
 
 Commit ("Install BMAD v7") and push. Include the skill folders you installed into, `_bmad/` and `skills-lock.json`; stage them by name, not with `git add -A`.
 
@@ -121,6 +123,8 @@ Try to protect `main` in `OWNER/PROJECT` through the API (`gh api --hostname HOS
 
 ## Step 8: Report
 
+First run `python KIT/bin/kit.py --kit KIT doctor` in PROJECT. It must still print `doctor: OK`. Each `open:` line it prints is a setup step still open (Actions off, a missing label, branch protection, no active BMAD initiative); every one goes into item 3 of the report, in its own words. "No active BMAD initiative" is always open after setup: the person sets it before planning (`RUNBOOK.md`, "Plan the product", step 0), because the fence keeps agents out of `_bmad/custom/`.
+
 Give the person a short report:
 
 1. The link to the repository, the local folder path, and the kit folder (KIT), which the project needs next to it for `kit.py sync`.
@@ -128,7 +132,7 @@ Give the person a short report:
 3. What is left for them, with exact instructions:
    - Branch protection, if step 7 is open.
    - Without Actions: each lap runs the factory judge on its own pull request (lap step A10); require the three checks once the first lap has posted them (`RUNBOOK.md`, "Without GitHub Actions"). The judge needs Java 21 and Node 22 on the machine where laps run.
-   - Plan the product with BMAD, fill in `MISSION.md` themselves, then say "run a lap".
+   - Set the active BMAD initiative, plan the product with BMAD (each planning step is its own `planning/<step>` pull request), fill in `MISSION.md` themselves, then say "run a lap". See `RUNBOOK.md`, "Plan the product".
 4. Anything that surprised you, or that this file or the kit's other documents got wrong, so the kit can be fixed.
 
 Then tell the person to close this session. Laps run in a fresh session opened inside the project folder, so its `AGENTS.md` and rules apply (in Kiro: `kiro-cli chat --agent factory`).

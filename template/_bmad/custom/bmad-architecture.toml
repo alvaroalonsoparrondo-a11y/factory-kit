@@ -8,4 +8,13 @@ persistent_facts = [
   "file:{project-root}/harness/README.md",
   "The stack is fixed: the one the Layout line in AGENTS.md names. The architecture picks libraries and versions within it, never another language or framework. The architecture must keep the runtime contract in harness/README.md exactly, and must say how each item is met: start command, health path, build-identity path, state directory, how the jar serves the built frontend, and where docs/openapi.yaml is checked.",
   "No login, identity or permission design unless MISSION.md puts it in scope and a human has approved it.",
+  "Pin versions only from the registries: Maven Central's `maven-metadata.xml` for the latest release, then the artifact's POM to see that it is a real jar and not a relocation; `npm view <package> version time peerDependencies` for npm. Prefer a release at least two weeks old. Web search is for discovery only: it named versions that were not the latest, and an artifact that was only a relocation POM.",
+  "Every AD that names a framework setting, property, annotation or API must be checked against the pinned version before the spine is final: in the library's configuration metadata (for Spring Boot, `META-INF/spring-configuration-metadata.json` in the pinned jars), its Javadoc for that version, or a throwaway test. The AD says how it was checked. If the version cannot do what the AD wants, the AD says what it takes instead (for example one customizer bean), not that it needs nothing.",
+  "Name the owner of a rule as 'the story that first adds X', never a specific story: stories do not exist yet when the spine is written. The exception is the runtime contract in harness/README.md, which the walking skeleton must deliver.",
+  "An amended AD keeps its reason and date in the AD itself (`Amended <date>: <why>`). Decision logs (`.memlog.md`) are not committed, so the spine on main is the only record the team shares.",
+]
+
+# Appended to BMAD's default finalize reviewers.
+finalize_reviewers = [
+  "Version and API check: for every library version, property, annotation or API the spine names, confirm that it exists in the pinned version and does what the AD says. Versions must come from Maven Central metadata or `npm view`, not web search; a property or API must be found in the pinned version's configuration metadata, its Javadoc, or a test. Flag each one that was asserted without such a check, and each where the pinned version does less than the AD claims (for example a property that covers numbers and booleans but not strings).",
 ]

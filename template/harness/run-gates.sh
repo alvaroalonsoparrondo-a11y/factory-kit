@@ -3,7 +3,16 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-CANDIDATE="${FACTORY_RUNTIME_CANDIDATE:-$(git rev-parse HEAD 2>/dev/null || echo uncommitted)-local}"
+CANDIDATE="${FACTORY_RUNTIME_CANDIDATE:-}"
+if [ -z "$CANDIDATE" ]; then
+  # A local run names its own candidate. CI and the judge always set one, on a clean checkout.
+  CANDIDATE="$(git rev-parse HEAD 2>/dev/null || echo uncommitted)"
+  if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+    echo "WARNING: uncommitted changes: the code under test is not commit ${CANDIDATE}. Commit first for evidence."
+    CANDIDATE="${CANDIDATE}-dirty"
+  fi
+  CANDIDATE="${CANDIDATE}-local"
+fi
 PORT="${PORT:-8080}"
 BASE="http://localhost:${PORT}"
 
