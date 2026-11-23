@@ -2,6 +2,14 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-23 — The product owner reports each ticket's triage (from `factory-pilot-2`)
+
+Seen in `factory-pilot-2` while re-testing kit `76aeda9`: a triage decision and a BMAD ticket `status` are separate, and only the factory's board and dispatcher read both. `tickets.py` and the product owner (Sofia) never read `docs/triage/`, so "what's ready" or `next` could offer a ticket that triage had sent to `needs-info` or `wait`.
+
+- **`_bmad/custom/bmad-agent-po.toml`:** one more persistent fact. Whenever Sofia says which tickets are ready or next, she runs `triage.py <ref> check` for each one and shows the answer. Only a fresh `ready-to-implement` counts as ready for a lap. `none` or `stale` means triage it first. `ready-to-spec` and `needs-info` list their questions and offer `refine <ref>`, and `wait` gives its summary. After a refine she says the ticket needs triage again, since its decision goes stale.
+- **One writer each:** Sofia never writes, changes or deletes a decision, and never sets a ticket `status` from one. Triage still never writes a BMAD `status`.
+- **Not done:** `tickets.py` itself still knows nothing of triage. The change is in Sofia's instructions, not in BMAD's script.
+
 ## 2026-11-23 — A hand triage is recorded on `main` without a manual commit (from `factory-pilot-2`)
 
 Seen in `factory-pilot-2`, re-testing kit `76aeda9` on ticket 1.2: after a hand triage, `triage.py record` wrote `docs/triage/<ref>.json` into the checkout and the skill told the human to commit it to `main`. That was a step outside the lap and its pull request, and only a commit on `main` lets anything read the decision. The dispatcher already commits its own triages straight to `main`.
