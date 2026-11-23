@@ -68,7 +68,7 @@ Never create or handle tokens or secrets; list those steps for me at the end.
 Setup only: do not write the mission, a PRD, tickets or code.
 ~~~
 
-Add your own rules as extra lines at the end of the prompt. To change how setup works for everyone, change `AGENT_SETUP.md` (see [MODIFYING.md](MODIFYING.md)), not the prompt.
+Add your own rules as extra lines at the end of the prompt. To change how setup works for everyone, change `AGENT_SETUP.md` (see [MODIFYING.md](template/MODIFYING.md)), not the prompt.
 
 After the agent finishes, close that session. Laps always run in a fresh session opened inside the project folder, so its `AGENTS.md` and rules apply.
 
