@@ -39,6 +39,7 @@ class GuardTests(unittest.TestCase):
         self.assertTrue(guards.judge("protected-paths", ["docs/harness/x", "mission.md", "backend/CLAUDE.md"])[0])
         for path in ("MISSION.md", "AGENTS.md", ".github/workflows/x.yml", ".claude/settings.json",
                      ".claude/skills/lap/SKILL.md", ".kiro/agents/factory.json", ".kiro/skills/lap/SKILL.md",
+                     ".claude/skills/triage/SKILL.md", ".kiro/skills/triage/SKILL.md",
                      "_bmad/custom/bmad-build.toml", "FACTORY_RULES.md"):
             self.assertFalse(guards.judge("protected-paths", [path])[0], path)
 

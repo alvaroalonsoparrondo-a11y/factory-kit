@@ -33,6 +33,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import board as b
+import triage  # each ticket's route before its lap (docs/triage/<ref>.json on main)
 
 HERE = Path(__file__).resolve().parent
 CACHE_SECONDS = 5
@@ -322,6 +323,10 @@ class Source:
             snap["plans"][ref] = b.read_plans(files if folder == self.root else working_files(folder))
             if ref not in snap["branches"]:
                 snap["branches"].append(ref)
+        try:
+            snap["triage"] = triage.statuses(self.root, "origin/main", snap["tickets"], snap["plans"]["main"])
+        except RuntimeError as e:
+            snap["problems"].append(f"triage decisions cannot be read: {e}")
         dirty = bool(self._git("status", "--porcelain").strip())
         snap["local"] = {"branch": branch, "dirty": dirty, "github": not isinstance(self.gh, NoGitHub)}
         # Each lap's signals, and whether the working tree it runs in has gone quiet.

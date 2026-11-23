@@ -79,6 +79,20 @@ class FakeRepo:
     def mark_done(self, ticket, ref, pr):
         self.calls.append(("mark done", ref, pr))
 
+    def add_detached_worktree(self, path, sha):
+        self.calls.append(("detached add", Path(path).name, sha))
+
+    def remove_detached_worktree(self, path):
+        self.calls.append(("detached remove", Path(path).name))
+
+    def triage_record(self, decision, ref, sha):
+        out = d.triage.validate(decision, {"ref": ref, "risk": "", "hitl": False})
+        out.update(main_sha=sha, fingerprint="f", prereqs_done=[])
+        return out
+
+    def commit_triage(self, record):
+        self.calls.append(("commit triage", record["ref"], record["state"]))
+
 
 class FakeGitHub:
     repo = "o/r"
@@ -662,6 +676,122 @@ class JudgeComment(unittest.TestCase):
     def test_a_comment_about_another_commit_is_not_used(self):
         body = f"{d.JUDGE_MARKER}\n<!-- sha:{'b' * 40} -->\nold failure"
         self.assertEqual(self.summary([{"body": body}]), "(no check run found)")
+
+
+def decided(state="ready-to-implement", fresh=True, why="", questions=()):
+    return {"state": state, "fresh": fresh, "why": why, "summary": "Because.", "questions": list(questions),
+            "plan": "lap" if state == "ready-to-implement" else None, "triaged_at": "2026-11-23T10:00:00+01:00"}
+
+
+ANSWER = '{"ref": "1.1", "state": "ready-to-implement", "summary": "Clear.", "rationale": [], "questions": []}'
+
+
+class Triage(unittest.TestCase):
+    def world(self, tickets, decisions=None, **kw):
+        w = World(tickets, **kw)
+        w.snapshot["triage"] = decisions or {}
+        return w
+
+    def test_without_triage_in_the_snapshot_nothing_changes(self):
+        w = World([ticket(1)])
+        self.assertEqual(w.tick()["claimed"][0][0], "1.1")
+
+    def test_an_untriaged_ticket_is_triaged_not_claimed(self):
+        w = self.world([ticket(1, touches=["a/**"]), ticket(2, after=[1])])
+        rep = w.tick()
+        self.assertEqual(rep["claimed"], [])
+        self.assertEqual(w.gh.created, [])
+        self.assertEqual(refs(rep["triaging"]), ["1.1"])
+        started = w.runner.started[0]
+        self.assertEqual(Path(started["cwd"]), Path("/work/wt/triage-1.1"))
+        self.assertTrue(started["argv"][2].startswith("triage 1.1"))
+        self.assertEqual(started["argv"][started["argv"].index("--allowedTools") + 1], d.TRIAGE_TOOLS)
+        self.assertNotIn("Bash", d.TRIAGE_TOOLS.split())
+        self.assertIn(("detached add", "triage-1.1", MAIN), w.repo.calls)
+        self.assertIn(("1.2", "after 1.1; triaged when next in line"), rep["waiting"])
+
+    def test_a_finished_triage_is_recorded_on_main_and_read_next_pass(self):
+        w = self.world([ticket(1)])
+        w.tick()
+        tri = w.store.state["triage"]["1.1"]
+        w.runner.finish(tri, 0, "some log\n" + ANSWER + "\n# exit 0")
+        rep = w.tick()
+        self.assertEqual(rep["triaged"], [("1.1", "ready-to-implement: Clear.")])
+        self.assertIn(("commit triage", "1.1", "ready-to-implement"), w.repo.calls)
+        self.assertIn(("detached remove", "triage-1.1"), w.repo.calls)
+        self.assertEqual(w.store.state["triage"], {})
+        self.assertEqual(rep["claimed"], [])  # this pass's snapshot predates the decision
+        self.assertEqual(len(w.runner.started), 1)
+        w.snapshot["triage"] = {"1.1": decided()}
+        self.assertEqual(refs(w.tick()["claimed"]), ["1.1"])
+
+    def test_a_running_triage_is_left_alone_and_one_runs_at_a_time(self):
+        w = self.world([ticket(1, touches=["a/**"]), ticket(2, touches=["b/**"])])
+        rep = w.tick()
+        self.assertEqual(refs(rep["triaging"]), ["1.1"])
+        self.assertIn(("1.2", "queued for triage"), rep["waiting"])
+        rep = w.tick()
+        self.assertTrue(rep["triaging"][0][1].startswith("running"))
+        self.assertEqual(len(w.runner.started), 1)
+
+    def test_a_triage_without_an_answer_stops_for_the_human_until_released(self):
+        w = self.world([ticket(1)])
+        w.tick()
+        w.runner.finish(w.store.state["triage"]["1.1"], 0, "I could not decide.")
+        rep = w.tick()
+        self.assertIn("cannot be recorded: no JSON object", rep["needs_you"][0][1])
+        self.assertIn("dispatch.py release 1.1", rep["needs_you"][0][1])
+        self.assertEqual(len(w.runner.started), 1)
+        rep = w.tick()
+        self.assertEqual(len(w.runner.started), 1)
+        self.assertEqual(refs(rep["needs_you"]), ["1.1"])
+
+    def test_a_usage_limit_is_tried_again_later(self):
+        w = self.world([ticket(1)])
+        w.tick()
+        w.runner.finish(w.store.state["triage"]["1.1"], 1, "You've hit your limit · resets 3pm")
+        rep = w.tick()
+        self.assertIn(("1.1", "triage hit a usage limit; it is tried again later"), rep["waiting"])
+        self.assertEqual(len(w.runner.started), 1)
+        w.now += d.LIMIT_RETRY_MINUTES * 60 + 1
+        w.tick()
+        self.assertEqual(len(w.runner.started), 2)
+
+    def test_a_stale_decision_is_triaged_again(self):
+        w = self.world([ticket(1)], {"1.1": decided(fresh=False, why="main changed a.java")})
+        rep = w.tick()
+        self.assertEqual(rep["triaging"][0][1].split(":")[0], "triage again (main changed a.java)")
+
+    def test_routes_other_than_ready_go_to_the_human(self):
+        w = self.world([ticket(1, touches=["a/**"]), ticket(2, touches=["b/**"]), ticket(3, touches=["c/**"])],
+                       {"1.1": decided("ready-to-spec", questions=["Which slugs are reserved?"]),
+                        "1.2": decided("needs-info", questions=["What does 409 return?"]), "1.3": decided("wait")})
+        rep = w.tick()
+        self.assertEqual(rep["claimed"], [])
+        texts = dict(rep["needs_you"])
+        self.assertIn("refine 1.1", texts["1.1"])
+        self.assertIn("Which slugs are reserved?", texts["1.1"])
+        self.assertTrue(texts["1.2"].startswith("Triaged needs-info"))
+        self.assertTrue(texts["1.3"].startswith("Triaged wait"))
+
+    def test_the_next_ticket_is_triaged_while_its_prerequisite_is_in_flight(self):
+        w = self.world([ticket(1, touches=["a/**"]), ticket(2, after=[1], touches=["a/**"])], {"1.1": decided()})
+        w.tick()  # claims 1.1
+        rep = w.tick()
+        self.assertEqual(refs(rep["triaging"]), ["1.2"])
+        self.assertEqual(w.gh.created, [("story/1.1", MAIN)])
+
+    def test_without_agents_the_human_is_asked_to_triage(self):
+        w = self.world([ticket(1)], agents=False)
+        rep = w.tick()
+        self.assertEqual(w.runner.started, [])
+        self.assertIn("say `triage 1.1` in a session on main", dict(rep["needs_you"])["1.1"])
+
+    def test_dry_run_starts_no_triage(self):
+        w = self.world([ticket(1)])
+        rep = w.tick(dry=True)
+        self.assertEqual(rep["triaging"], [("1.1", "would triage")])
+        self.assertEqual(w.runner.started, [])
 
 
 if __name__ == "__main__":

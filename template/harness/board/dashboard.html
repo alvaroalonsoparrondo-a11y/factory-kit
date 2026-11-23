@@ -159,7 +159,7 @@ const POLL_MS = 4000
 const CHECKS = ['gates', 'protected-paths', 'scope-guard']
 const CHECK_LABEL = { gates: 'gates', 'protected-paths': 'paths', 'scope-guard': 'scope' }
 const COLUMNS = [
-  { key: 'backlog', label: 'Backlog', who: 'planned' },
+  { key: 'backlog', label: 'Backlog', who: 'triage' },
   { key: 'build', label: 'Build', who: 'lap · bmad-build' },
   { key: 'review', label: 'Review', who: 'review lenses' },
   { key: 'ci', label: 'CI', who: 'the three checks' },
@@ -188,6 +188,8 @@ async function getJSON(url) {
 function column(r) {
   if (r.stage === 'Done' || r.stage === 'Dropped') return 'done'
   if (r.status === 'blocked' || r.waiting_for_you || (r.needs_you && r.stage !== 'Planned')) return 'human'
+  // Triaged for a human to settle first: planning ahead, while the factory builds something else.
+  if (r.stage === 'Planned' && r.triage?.fresh && ['ready-to-spec', 'needs-info'].includes(r.triage.state)) return 'human'
   if (r.stage === 'Planned') return 'backlog'
   if (r.stage === 'In CI') return 'ci'
   if (r.stage === 'In review') return 'review'
@@ -204,7 +206,8 @@ function card(r) {
   const col = column(r)
   const live = col === 'build' || col === 'review' || col === 'ci'
   const human = col === 'human'
-  const next = r.status === 'needs you' && r.stage === 'Planned' && !r.waiting_for_you
+  const next = r.status === 'needs you' && r.stage === 'Planned' && !r.waiting_for_you && !human
+    && String(r.needs_you).startsWith('Start the lap')
   const flag = r.status === 'quiet' ? '<span class="flag">quiet</span>'
     : r.waiting_for_you ? `<span class="flag" title="the lap's own signal">waiting · ${esc(r.waiting_for_you.kind)}</span>`
     : human ? '<span class="flag">your call</span>'
@@ -218,6 +221,11 @@ function card(r) {
     ? `<div class="checks">${CHECKS.map((c) => `<span class="chip ${esc(r.checks[c])}" title="${esc(c)}: ${esc(r.checks[c])}">${CHECK_LABEL[c]}</span>`).join('')}</div>` : ''
   const meta = []
   if (r.risk) meta.push(`<span class="risk-${esc(r.risk)}">${esc(r.risk)}</span>`)
+  if (r.stage === 'Planned' && r.triage) {
+    const t = r.triage
+    const tip = t.fresh ? `${t.summary} (triaged ${t.triaged_at})` : `stale: ${t.why}`
+    meta.push(`<span title="${esc(tip)}">triage: ${esc(t.fresh ? t.state : 'stale')}</span>`)
+  }
   if (r.reviews) {
     const f = r.reviews.findings
     const found = f ? ` · triage log: ${f.found} found, ${f.patched} patched, ${f.deferred} deferred` : ''

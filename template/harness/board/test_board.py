@@ -400,5 +400,40 @@ class Reading(unittest.TestCase):
         self.assertEqual(b.check_state("completed", "cancelled"), "red")
 
 
+def decided(state="ready-to-implement", fresh=True, why="", questions=()):
+    return {"state": state, "fresh": fresh, "why": why, "summary": "Because.", "questions": list(questions),
+            "plan": "lap", "triaged_at": "2026-11-23T10:00:00+01:00"}
+
+
+class Triage(unittest.TestCase):
+    def derive(self, tickets, decisions):
+        s = snap(tickets)
+        s["triage"] = decisions
+        return b.derive(s)
+
+    def test_without_decisions_in_the_snapshot_the_lap_is_offered_as_before(self):
+        self.assertEqual(row(b.derive(snap([ticket(1)])), 1)["needs_you"], "Start the lap")
+
+    def test_an_untriaged_first_ticket_asks_for_triage(self):
+        r = row(self.derive([ticket(1)], {}), 1)
+        self.assertEqual((r["needs_you"], r["triage"]), ("Triage it (`triage 1`)", None))
+
+    def test_a_stale_decision_says_why(self):
+        r = row(self.derive([ticket(1)], {"1": decided(fresh=False, why="main changed a.java")}), 1)
+        self.assertEqual(r["needs_you"], "Triage it (`triage 1`): main changed a.java")
+
+    def test_ready_to_implement_offers_the_lap(self):
+        self.assertEqual(row(self.derive([ticket(1)], {"1": decided()}), 1)["needs_you"], "Start the lap")
+
+    def test_a_later_ticket_to_spec_needs_you_now(self):
+        board = self.derive([ticket(1), ticket(2, after=[1])],
+                            {"1": decided(), "2": decided("ready-to-spec", questions=["Which slugs are reserved?"])})
+        r = row(board, 2)
+        self.assertEqual(r["status"], "needs you")
+        self.assertIn("`refine 2`", r["needs_you"])
+        self.assertIn("Which slugs are reserved?", r["needs_you"])
+        self.assertEqual(row(board, 1)["needs_you"], "Start the lap")
+
+
 if __name__ == "__main__":
     unittest.main()

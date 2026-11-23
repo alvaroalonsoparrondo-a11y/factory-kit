@@ -22,8 +22,8 @@ The agent never creates, edits, moves or deletes these paths:
 - `MISSION.md`, `FACTORY_RULES.md`, `AGENTS.md`, `CLAUDE.md`, `kit.lock.json`
 - `harness/`
 - `.github/`
-- `.claude/settings.json`, `.claude/skills/lap/`
-- `.kiro/agents/`, `.kiro/skills/lap/`
+- `.claude/settings.json`, `.claude/skills/lap/`, `.claude/skills/triage/`
+- `.kiro/agents/`, `.kiro/skills/lap/`, `.kiro/skills/triage/`
 - `_bmad/custom/`
 
 If a ticket seems to need such a change, the agent stops and asks. A human may approve one by adding the label `human-judge-change` to the pull request.

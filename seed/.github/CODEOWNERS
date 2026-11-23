@@ -9,6 +9,8 @@
 /.github/                   @__OWNER__
 /.claude/settings.json      @__OWNER__
 /.claude/skills/lap/        @__OWNER__
+/.claude/skills/triage/     @__OWNER__
 /.kiro/agents/              @__OWNER__
 /.kiro/skills/lap/          @__OWNER__
+/.kiro/skills/triage/       @__OWNER__
 /_bmad/custom/              @__OWNER__

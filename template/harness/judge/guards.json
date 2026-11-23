@@ -1,7 +1,7 @@
 {
   "protected-paths": {
     "about": "The judge and the constitution. Same list as FACTORY_RULES.md section 2, the fence and CODEOWNERS.",
-    "pattern": "^(MISSION\\.md|FACTORY_RULES\\.md|AGENTS\\.md|CLAUDE\\.md|kit\\.lock\\.json|harness/|\\.github/|\\.claude/settings\\.json|\\.claude/skills/lap/|\\.kiro/agents/|\\.kiro/skills/lap/|_bmad/custom/)",
+    "pattern": "^(MISSION\\.md|FACTORY_RULES\\.md|AGENTS\\.md|CLAUDE\\.md|kit\\.lock\\.json|harness/|\\.github/|\\.claude/settings\\.json|\\.claude/skills/lap/|\\.claude/skills/triage/|\\.kiro/agents/|\\.kiro/skills/lap/|\\.kiro/skills/triage/|_bmad/custom/)",
     "ignore_case": false,
     "renames": true,
     "skip_template": true,
