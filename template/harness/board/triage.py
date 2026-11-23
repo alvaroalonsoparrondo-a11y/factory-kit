@@ -208,7 +208,8 @@ def freshness(root, rev, record, ticket, plans):
 
 
 def statuses(root, rev, tickets, plans):
-    """{ref: {state, fresh, why, summary, questions, plan, triaged_at}} for every ticket with a decision.
+    """{ref: {state, fresh, why, summary, rationale, questions, next_step, plan, triaged_at}} for every ticket
+    with a decision.
     Cached per commit: the answer depends on nothing else."""
     sha = (git(root, "rev-parse", "--verify", "--quiet", rev, check=False) or "").strip()
     key = (str(root), sha)
@@ -221,7 +222,8 @@ def statuses(root, rev, tickets, plans):
             continue
         fresh, why = freshness(root, rev, rec, t, plans)
         out[t["ref"]] = {"state": rec.get("state"), "fresh": fresh, "why": why, "summary": rec.get("summary", ""),
-                         "questions": rec.get("questions", []), "plan": rec.get("plan"),
+                         "rationale": rec.get("rationale", []), "questions": rec.get("questions", []),
+                         "next_step": rec.get("next_step", ""), "plan": rec.get("plan"),
                          "triaged_at": rec.get("triaged_at", "")}
     if sha:
         _cache.clear()
