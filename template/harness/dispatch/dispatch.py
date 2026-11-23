@@ -569,7 +569,8 @@ class Dispatcher:
         for ref, r in rows.items():
             if ref in runs or not r["branch"] or r["stage"] in ("Done", "Dropped"):
                 continue
-            rep["needs_you" if r["needs_you"] else "waiting"].append(
+            hand_needs_you = r["needs_you"] or r["stage"] == "Built"
+            rep["needs_you" if hand_needs_you else "waiting"].append(
                 (ref, f"hand-started lap, not dispatched here: {r['needs_you'] or r['stage']}"))
 
         # New laps.
