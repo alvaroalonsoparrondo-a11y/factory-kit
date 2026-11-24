@@ -51,7 +51,7 @@ The goal: **the human is never asked anything during a lap.** What needs the hum
 
 If a prepared lap's plan comes out with an `## Open Questions` entry, or `bmad-build` finds an intent gap later, the lap does not ask. It:
 
-1. marks the ticket `needs-info` on the board with the questions (`tickets.py mark <ref> draft --blocked "<questions>"`), on `main`;
+1. marks the ticket blocked with the questions (`tickets.py mark <ref> draft --blocked "<questions>"`), on `main`;
 2. deletes its branch on `origin` and ends, with no pull request;
 3. reports one line: the ticket was handed back, and why.
 
@@ -71,7 +71,7 @@ Edit the ticket before the lap, or after it ends. To change it during a lap, sto
 
 - **Lap skill**, step 3: say whether the ticket is prepared (leaf file `refined: true` and fresh `ready-to-implement`). Step 6: for a prepared ticket, copy the criteria into the locked section, self-approve, and hand back on an open question or intent gap (section 3). Everything else as today.
 - **`_bmad/custom/bmad-build.toml`**: for a prepared ticket, CHECKPOINT 1 is approved by the lap, and an open question or intent gap halts back to the lap instead of asking.
-- **`triage.py`** (or a small helper next to it): a `prepared` answer, so the lap and the board read it the same way.
+- **`triage.py`** (or a small helper next to it): a `prepared` answer, so the lap and the dispatcher read it the same way.
 - **No board or dashboard changes.** A handed-back ticket already shows its questions under Needs you on the live dashboard, through its blocked reason. (The CI board is to be removed; the live dashboard stays.)
 - **RUNBOOK**: a short "Prepare the next ticket while a lap runs" section.
 
