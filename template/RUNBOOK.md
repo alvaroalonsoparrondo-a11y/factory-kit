@@ -33,7 +33,7 @@ You drive the factory by hand at three points: you start each lap, you merge the
 
 ## Plan the product (BMAD, interactive, in this folder)
 
-`main` takes changes only through pull requests, and a lap reads its ticket and its runtime scenario from `main`. So each planning step below ends in its own pull request, from a branch `planning/<step>` (for example `planning/prd`, `planning/architecture`, `planning/tickets`):
+A lap reads its ticket and its runtime scenario from `main`. So each planning step below ends in its own pull request, from a branch `planning/<step>` (for example `planning/prd`, `planning/architecture`, `planning/tickets`). Preparing one ticket that is already sliced is not a planning step: it goes straight to `main`, with no pull request (see "Prepare the next ticket while a lap runs" below).
 
 - The agent commits on that branch, cut from `origin/main`, never on `main`. When you say the step is done, it pushes the branch and opens the pull request with `gh` (title `planning: <step>`; the template's Ticket section says `none: planning`; the evidence lines that only apply to a lap can say `n/a`).
 - It is judged like any other pull request. `gates` passes with "no backend yet" until the walking skeleton merges. A planning pull request that touches a protected path (`MISSION.md`) needs `human-judge-change`.
@@ -75,7 +75,7 @@ By hand: in a session on an up-to-date `main` (not a lap worktree), say `triage 
 To keep a lap from stopping for you, settle a ticket's "what" before its lap starts. Then the lap never asks you anything about it, not even to approve its plan.
 
 1. Prepare in this folder, on an up-to-date `main` (`git switch main && git pull`). Every lap runs in its own worktree (see Run laps), so this folder is free for planning. Sofia commits on whatever branch her session is on, so never prepare inside a lap's worktree: a ticket change there would only reach `main` inside that lap's pull request (and trip its scope check).
-2. Refine the ticket with the product owner: `refine 1.3`. Sofia writes its ticket file beside `tickets.toml` with numbered criteria and Boundaries. When you approve them, she sets `refined: true`: that is your approval of the "what". She commits; she never pushes.
+2. Refine the ticket with the product owner: `refine 1.3`. Sofia writes its ticket file beside `tickets.toml` with numbered criteria and Boundaries. When you approve them, she sets `refined: true`: that is your approval of the "what". She commits on `main`, changing only that ticket and its `docs/runtime/<ref>.json`; she never pushes, and opens no pull request. Your approval is the review a pull request would add.
 3. Push it to `main`: `git push` (if `main` moved, `git pull --rebase` first; never force). Triage and the dispatcher read tickets only from `origin/main`, so until then the factory still sees the old ticket. The change makes the ticket's triage stale, so it is triaged again: by the dispatcher on its next pass, or by you with `triage 1.3` in this folder.
 4. A fresh `ready-to-implement` on a `refined: true` ticket makes it **prepared**: `python harness/board/triage.py 1.3 check` prints `prepared: <ticket file>`, and its card on the live dashboard says `prepared`.
 
