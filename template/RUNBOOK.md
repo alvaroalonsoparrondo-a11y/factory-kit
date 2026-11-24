@@ -74,9 +74,17 @@ By hand: in a session on an up-to-date `main` (not a lap worktree), say `triage 
 
 To keep a lap from stopping for you, settle a ticket's "what" before its lap starts. Then the lap never asks you anything about it, not even to approve its plan.
 
-1. While another lap runs, refine the ticket with the product owner, in a session on `main`: `refine 1.3`. Sofia writes its ticket file beside `tickets.toml` with numbered criteria and Boundaries. When you approve them, she sets `refined: true`: that is your approval of the "what".
-2. Commit it to `main`. The change makes the ticket's triage stale, so it is triaged again.
-3. A fresh `ready-to-implement` on a `refined: true` ticket makes it **prepared**: `python harness/board/triage.py 1.3 check` prints `prepared: <ticket file>`, and its card on the live dashboard says `prepared`.
+1. Prepare in a planning worktree of `origin/main`, never on a lap's branch: Sofia commits on whatever branch her session is on, and a ticket change on a lap's branch would only reach `main` inside that lap's pull request (and trip its scope check).
+
+   ```bash
+   git fetch origin
+   git worktree add --detach ../<project>-plan origin/main
+   ```
+
+   Open an agent session in `../<project>-plan`. Reuse it for the next ticket after `git fetch origin && git switch --detach origin/main` there.
+2. Refine the ticket with the product owner there: `refine 1.3`. Sofia writes its ticket file beside `tickets.toml` with numbered criteria and Boundaries. When you approve them, she sets `refined: true`: that is your approval of the "what". She commits; she never pushes.
+3. Push it to `main`: `git push origin HEAD:main` (if `main` moved, `git pull --rebase origin main` first; never force). Triage and the dispatcher read tickets only from `origin/main`, so until then the factory still sees the old ticket. The change makes the ticket's triage stale, so it is triaged again: by the dispatcher on its next pass, or by you with `triage 1.3` in the same worktree.
+4. A fresh `ready-to-implement` on a `refined: true` ticket makes it **prepared**: `python harness/board/triage.py 1.3 check` prints `prepared: <ticket file>`, and its card on the live dashboard says `prepared`.
 
 A prepared ticket's lap copies your criteria into the plan and approves its own plan, whatever the ticket's `risk`. If its plan raises a question about what the ticket should do anyway, the lap does not wait: it **hands the ticket back**. That means it marks the ticket blocked on `main` with the questions (`Handed back by the lap: …`), deletes its branch, and ends without a pull request. The questions show under **Needs you**. Answer them in the ticket, clear the block (`tickets.py mark 1.3 draft`), and commit both to `main`. The ticket is triaged and built again. The dispatcher frees the lap's worktree; after a hand-started lap, remove it yourself.
 

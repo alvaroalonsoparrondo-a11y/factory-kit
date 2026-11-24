@@ -20,7 +20,7 @@ The human settles a ticket's "what" before its lap, in the ticket (Sofia's refin
   - Today a blocked lap stayed in memory, so its ticket was never claimed again. A lap whose branch is gone and whose ticket `main` marks `Handed back by the lap` is now closed instead: its worktree is removed, a lap-report line is written, and the questions go to Needs you.
   - Once the human answers and clears the block, the ticket is triaged and claimed again.
 - **Live dashboard:** a prepared ticket's card says `prepared`; its drawer says the lap approves the plan. The CI board is unchanged.
-- **RUNBOOK:** "Prepare the next ticket while a lap runs".
+- **RUNBOOK:** "Prepare the next ticket while a lap runs", done in a planning worktree of `origin/main` and pushed to `main`, never on a lap's branch.
 - **Unchanged:** a ticket that was not prepared, including triage's existing self-approval for clear, low-risk tickets.
 - **Tests:** 4 triage tests, 5 dispatcher tests. The dashboard cards were checked by running the page's own functions on fake rows.
 - **Not covered:** no real prepared lap or hand-back has run yet, and `bmad-build` following the new rule is untested. The first run is in `factory-pilot-2` after `kit.py sync`.
