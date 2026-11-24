@@ -2,6 +2,16 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-24 — The judge: one machine line no longer hides a real test failure (issue #15)
+
+Seen while testing `harness/judge/classify.py` in `factory-pilot`: a log with `Port 8190 was already in use` and a failing test (`LinkApiControllerTest.shortens:42 expected 201 but was 400`) was called `environment`. `classify()` returned on the first machine line anywhere in the log, so a red change took no round and the dispatcher sent it to the human as a machine problem. That dodges the round budget, and a retry can loop without spending rounds.
+
+- **Only the failing gate counts.** `run-gates.sh` stops at the first red step, so `classify` reads the log after the last `== Gate` heading. A machine line in an earlier gate came from a step that recovered.
+- **A failure the change can cause wins.** New `CHANGE` patterns: Surefire/Failsafe `Failures: n`, a failing test line (`Class.method:line …`), Playwright and Vitest `n failed`, Maven and `tsc` compile errors, ESLint problems. One of them in the failing gate makes it `introduced`, and the evidence names the machine line beside it. The harness's own `GATE FAIL:` lines and test *errors* stay neutral, so a port in use that stops the app or a test context starting is still `environment`.
+- **`--check-main`** and the judge's own check of `main` use the same rule.
+- **`MODIFYING.md`:** the row for `classify.py` patterns says how the two lists differ.
+- **Tests:** mixed logs (the one from the issue, and four more) are `introduced`; a machine line in an earlier gate is ignored; a machine line in the failing gate with only `GATE FAIL:` or test errors is still `environment`.
+
 ## 2026-11-23 — The board shows triage the same way on CI and live (from `factory-pilot-2`)
 
 Seen in `factory-pilot-2`, reviewing the board after triage landed: CI's `BOARD.md` had no decisions in its snapshot, so it said "Start the lap" where the live board said "Triage it". A planned ticket with no decision, or a stale one, still counted as "ready". A fresh `wait` card stayed in Backlog though it needed a human. The drawer showed nothing of the decision.

@@ -7,9 +7,9 @@ Part of the judge. Standard library only (Python 3.11+). After `archon-validate`
 
 Prints one word on the first line, then the evidence:
 
-- `environment`: the machine failed, not the change. A known machine failure is in the log: a
-  download or network error, a port in use, a missing tool, a full disk, a browser that could not
-  be installed. No round: fix the machine and run again.
+- `environment`: the machine failed, not the change. A known machine failure is in the failing
+  gate's part of the log: a download or network error, a port in use, a missing tool, a full disk, a
+  browser that could not be installed. No round: fix the machine and run again.
 - `inherited` (only with `--check-main`): the gates are red on `origin/main` alone, too, so the
   change did not cause it. No round: `main` needs a fix first.
 - `introduced`: anything else. The conservative default: without evidence of the machine or of
@@ -17,7 +17,11 @@ Prints one word on the first line, then the evidence:
 - `timeout`: the gates did not finish in time. No round on its own: it may be the machine.
 
 A machine failure needs positive evidence, a line that matches below; an unknown failure is never
-called `environment`. Green comes from the exit code alone, never from this script.
+called `environment`. Only the failing gate counts: `run-gates.sh` stops at the first red step, so
+that is the part of the log after the last `== Gate` heading. A machine line in an earlier gate came
+from a step that recovered. And a failure the change can cause (a failing test, a compile error) in
+the failing gate makes it `introduced` even beside a machine line, so one stray line cannot dodge
+the round budget. Green comes from the exit code alone, never from this script.
 """
 import argparse
 import re
@@ -46,16 +50,47 @@ ENVIRONMENT = [
     ("browser", r"Failed to (download|install) (browser|chromium|Chromium)"),
     ("browser", r"Host system is missing dependencies to run browsers"),
 ]
+# Failures the change can cause, with evidence the code ran and was wrong. Beside a machine line
+# they win, so they may be broad: a match here only ever takes a round. Not here on purpose: the
+# harness's own `GATE FAIL:` lines (a port in use can stop the app becoming healthy) and test
+# *errors* (a test that could not start, e.g. on a port in use), which stay neutral.
+CHANGE = [
+    ("tests", r"Tests run: \d+, Failures: [1-9]"),                   # Maven Surefire / Failsafe summary
+    ("tests", r"^\[ERROR\]\s+[\w.$]+:\d+ "),                         # a failing test: Class.method:line message
+    ("tests", r"^\s*\d+ failed\b"),                                   # Playwright
+    ("tests", r"\bTests?\s+\d+ failed\b"),                            # Vitest / Jest summary
+    ("compile", r"COMPILATION ERROR"),
+    ("compile", r"\.java:\[\d+,\d+\]"),                                 # javac, as Maven prints it
+    ("compile", r"\berror TS\d+:"),
+    ("lint", r"\u2716 \d+ problems?\b"),                                # ESLint
+]
 TIMEOUT = "GATE STOPPED: did not finish"
+SECTION = re.compile(r"^== Gate\b.*$", re.MULTILINE)
 
 
-def environment(text):
-    """(kind, line) for the first machine failure in a gates log, or None."""
+def failing_gate(text):
+    """The part of a gates log that belongs to the gate that failed: after the last `== Gate` heading."""
+    heads = list(SECTION.finditer(text))
+    return text[heads[-1].start():] if heads else text
+
+
+def first_match(text, patterns):
+    """(kind, line) for the first line of `text` that matches one of `patterns`, or None."""
     for line in text.splitlines():
-        for kind, pattern in ENVIRONMENT:
+        for kind, pattern in patterns:
             if re.search(pattern, line):
                 return kind, line.strip()[:300]
     return None
+
+
+def environment(text):
+    """(kind, line) for a machine failure that explains a red gates log, or None.
+
+    The machine line must be in the failing gate, and that gate must show no failure the change can cause."""
+    gate = failing_gate(text)
+    if first_match(gate, CHANGE):
+        return None
+    return first_match(gate, ENVIRONMENT)
 
 
 def classify(text, main_red=None):
@@ -67,7 +102,11 @@ def classify(text, main_red=None):
         return "environment", f"{env[0]}: {env[1]}"
     if main_red:
         return "inherited", "the gates are red on main alone, too"
-    return "introduced", "no machine failure in the log" + ("" if main_red is None else ", and main alone is green")
+    gate = failing_gate(text)
+    change, machine = first_match(gate, CHANGE), first_match(gate, ENVIRONMENT)
+    why = (f"{change[0]}: {change[1]}" + (f" (beside a machine line, {machine[0]}: {machine[1]})" if machine else "")
+           if change else "no machine failure in the failing gate")
+    return "introduced", why + ("" if main_red is None else ", and main alone is green")
 
 
 def main(argv=None):

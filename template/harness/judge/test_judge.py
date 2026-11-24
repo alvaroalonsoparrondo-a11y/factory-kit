@@ -206,6 +206,27 @@ class ClassifyTests(unittest.TestCase):
                      "GATE FAIL: application did not become healthy", "1 failed: shortlink.spec.ts"):
             self.assertEqual(classify.classify(line)[0], "introduced", line)
 
+    def test_a_machine_line_does_not_hide_a_failure_the_change_caused(self):
+        # Seen in factory-pilot (issue #15): a stray port line beside a red test took no round.
+        for log in ("Port 8190 was already in use\n[ERROR] LinkApiControllerTest.shortens:42 expected 201 but was 400\n",
+                    "== Gate 1 + 2: backend\nnpm ERR! code ETIMEDOUT\n[ERROR] Tests run: 12, Failures: 1, Errors: 0\n",
+                    "== Gate 1 + 2: backend\n[ERROR] COMPILATION ERROR :\nbash: git: command not found\n",
+                    "== Gate 1\nerror TS2339: Property 'x' does not exist\nAddress already in use\n",
+                    "== Gate 3\nAddress already in use\n  1 failed\n    [chromium] shortlink.spec.ts\n"):
+            cause, evidence = classify.classify(log)
+            self.assertEqual(cause, "introduced", log)
+            self.assertIn("beside a machine line", evidence)
+            self.assertIsNone(classify.environment(log), log)
+
+    def test_only_the_failing_gate_counts(self):
+        recovered = "== Gate 1: frontend\nnpm WARN retry: ECONNRESET\nok\n== Gate 1 + 2: backend\n[ERROR] BUILD FAILURE\n"
+        self.assertEqual(classify.classify(recovered)[0], "introduced")
+        in_gate = "== Gate 1: frontend\nok\n== Gate 3: end-to-end\nPort 8080 was already in use\nGATE FAIL: application did not become healthy\n"
+        self.assertEqual(classify.classify(in_gate)[0], "environment")
+        # A test that could not start (an error, not a failure) on a port in use is still the machine.
+        errors = "== Gate 1 + 2\nPort 8190 was already in use\n[ERROR] Tests run: 3, Failures: 0, Errors: 3\n"
+        self.assertEqual(classify.classify(errors)[0], "environment")
+
     def test_main_and_timeout(self):
         self.assertEqual(classify.classify("Failures: 1", main_red=True)[0], "inherited")
         self.assertEqual(classify.classify("Failures: 1", main_red=False)[0], "introduced")
