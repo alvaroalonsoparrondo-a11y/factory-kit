@@ -1,8 +1,13 @@
-"""Tests of the board's derivation and rendering. Human-owned.
+"""Tests of the board's derivation. Human-owned.
 
 Run: python3 -m unittest discover -s harness/board -v
 """
+import io
+import json
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 import board as b
 
@@ -156,7 +161,7 @@ class Reviews(unittest.TestCase):
         s = snap([ticket(1)], {"main": [], "story/1": [p]}, ["story/1"])
         r = row(b.derive(s), 1)
         self.assertEqual((r["reviews"]["bmad"], r["reviews"]["findings"]["found"]), (2, 62))
-        self.assertIn("| 2/0/0 · 62 found, 27 patched, 2 deferred |", b.render_markdown(b.derive(s)))
+        self.assertEqual(b.findings_text(r["reviews"]["findings"]), "62 found, 27 patched, 2 deferred")
 
 
 TRIAGE = """---
@@ -329,26 +334,23 @@ class Problems(unittest.TestCase):
         self.assertEqual(row(board, 1)["stage"], "Done")
 
 
-class Rendering(unittest.TestCase):
-    def test_page(self):
+class CommandLine(unittest.TestCase):
+    def test_prints_the_board_as_json(self):
         s = snap([ticket(1, "Walking | skeleton"), ticket(2, "Redirect", after=[1])],
                  {"main": [], "story/1": [plan(1, "built", review="thorough")]}, ["story/1"],
                  [pull(7, "story/1", checks={**GREEN, "gates": "red"})])
-        md = b.render_markdown(b.derive(s))
-        self.assertIn("# Board: r", md)
-        self.assertIn("1 needs you · 1 waiting", md)
-        self.assertIn("- **epic-shortlink #1** Walking \\| skeleton: Paste the failing check into the lap "
-                      "(gates) → [#7](https://github.com/o/r/pull/7)", md)
-        self.assertIn("| 1 | Walking \\| skeleton | In CI | needs you | Paste the failing check into the lap "
-                      "(gates) | ❌✅✅ | 1/0/0 | [#7](https://github.com/o/r/pull/7) |", md)
-        self.assertIn("| 2 | Redirect | Planned | waiting | – (after #1) | – | – | – |", md)
-        self.assertIn("## Problems\n\nNone.", md)
-
-    def test_empty_project(self):
-        md = b.render_markdown(b.derive(snap([])))
-        self.assertIn("No tickets yet.", md)
-        self.assertIn("## Needs you now\n\nNothing.", md)
-
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "snapshot.json"
+            f.write_text(json.dumps(s), encoding="utf-8")
+            out = io.StringIO()
+            with mock.patch.object(b.sys, "stdout", out):
+                self.assertEqual(b.main(["--snapshot", str(f)]), 0)
+        board = json.loads(out.getvalue())
+        self.assertEqual(board, json.loads(json.dumps(b.derive(s))))
+        self.assertEqual((board["counts"]["needs you"], board["counts"]["waiting"]), (1, 1))
+        self.assertEqual(row(board, 1)["checks"], {**GREEN, "gates": "red"})
+        self.assertEqual(row(board, 1)["title"], "Walking | skeleton")
+        self.assertEqual(row(board, 2)["waiting_on"], ["1"])
 
 class Reading(unittest.TestCase):
     def test_frontmatter(self):
@@ -440,7 +442,6 @@ class Triage(unittest.TestCase):
         self.assertEqual([row(board, i)["status"] for i in (1, 2, 3, 4)],
                          ["needs you", "untriaged", "ready", "untriaged"])
         self.assertEqual((board["counts"]["untriaged"], board["counts"]["ready"]), (2, 1))
-        self.assertIn("2 untriaged", b.render_markdown(board))
 
     def test_every_stale_ticket_gets_a_hint(self):
         board = self.derive([ticket(1), ticket(2), ticket(3, after=[1])],
@@ -452,10 +453,6 @@ class Triage(unittest.TestCase):
         self.assertEqual(two["triage_hint"], "Stale (b): triage it again (`triage 2`), or the dispatcher will")
         self.assertEqual(three["status"], "waiting")
         self.assertIn("Stale (c)", three["triage_hint"])
-        md = b.render_markdown(board)
-        self.assertIn("– (Stale (b): triage it again", md)
-        self.assertIn("(after #1) · Stale (c)", md)
-        self.assertNotIn("Stale (b)", md.split("## Needs you now")[1].split("## ")[0])  # a hint, not a call
 
     def test_a_fresh_decision_leaves_no_hint(self):
         self.assertIsNone(row(self.derive([ticket(1)], {"1": decided()}), 1)["triage_hint"])

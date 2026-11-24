@@ -28,7 +28,7 @@ You drive the factory by hand at three points: you start each lap, you merge the
    - Approvals: 1, by someone other than the person who ran the lap. On a one-person trial: 0, because GitHub does not let you approve your own pull request.
    - On a free GitHub plan, branch protection is not enforced on private repositories. The checks still run and show red or green; you have to respect them yourself.
    - Where GitHub Actions is not allowed (see "Without GitHub Actions" below), start the factory judge first; the three checks then report as commit statuses. Without the judge, require the pull request but not the checks: they would never report, so no pull request could merge except by an admin bypassing the rule.
-6. **Check what is still open.** `python ../factory-kit/bin/kit.py doctor` checks the fence, then lists each setup step still open, as `open:` lines: GitHub Actions switched off (then see "Without GitHub Actions" below: nothing judges a pull request until you run the judge), a missing label, `main` not protected or not requiring the three checks (or protection not available on your plan), BMAD not installed, no active initiative. It asks GitHub through your `gh` login; `--offline` skips that. `kit.py init` runs it at the end, too. An open step never fails `doctor`, but read each one before you plan.
+6. **Check what is still open.** `python ../factory-kit/bin/kit.py doctor` checks the fence, then lists each setup step still open, as `open:` lines: GitHub Actions switched off (then see "Without GitHub Actions" below: nothing judges a pull request until you run the judge), a missing label, `main` not protected or not requiring the three checks (or protection not available on your plan), BMAD not installed, no active initiative. It asks GitHub through your `gh` login; `--offline` skips that. `kit.py init` runs it at the end, too. An open step never fails `doctor`, but read each one before you plan. Write what is done and what is open in `PROJECT_NOTES.md`, under "Setup status", and change a line there when you finish an open step.
 7. **Keep the factory up to date.** `python ../factory-kit/bin/kit.py status` shows which kit changes this project does not have yet. To take them, see "Taking an update from the kit" in [MODIFYING.md](MODIFYING.md).
 
 ## Plan the product (BMAD, interactive, in this folder)
@@ -173,25 +173,18 @@ done_when = "file:harness/skeleton.lock"
 
 ## Follow the tickets
 
-The board is one page with a row per ticket: its stage, its status, what it needs from you, and how often it was reviewed. Open `BOARD.md` on the `board` branch:
-
-`gh browse BOARD.md --branch board`
-
-- The `board` workflow rebuilds it on every push to `main` or a `story/` branch, on every pull request change, and when a check finishes. To rebuild by hand, run the `board` workflow from the Actions tab.
-- It is built from Git, GitHub and the BMAD files. It stores nothing itself, and the lap agent cannot write to it.
-- Reviews are shown as three numbers: BMAD review passes / rounds used / human reviews. The live board counts rounds from the lap's own record; the `board` workflow, which cannot see it, counts the commits CI judged after the first. Passes are counted from the plan's Review Triage Log, followed by its findings (found, patched, deferred) when the table can be read.
-- A merged pull request counts as done.
-- Work that is not pushed is not on the board. The lap pushes its branch when it starts, so this is only the first minute of a lap.
-- Anything the board cannot read is listed under "Problems" at the bottom.
-
-### The live board on your machine
+The board is the live board, run on your machine. It has a card per ticket: its stage, its status, what it needs from you, and how often it was reviewed.
 
 ```bash
 python harness/board/serve.py
 ```
 
-Then open `http://127.0.0.1:8765`. It shows the same tickets as columns of cards (Backlog, Build, Review, CI, Needs you, Done), refreshes every few seconds, and opens a ticket's entry, plan, epic and pull request text when you click its card.
+Then open `http://127.0.0.1:8765`. It shows the tickets as columns of cards (Backlog, Build, Review, CI, Needs you, Done), refreshes every few seconds, and opens a ticket's entry, plan, epic and pull request text when you click its card.
 
+- It is built from Git, GitHub and the BMAD files. It stores nothing itself, and the lap agent cannot write to it.
+- Reviews are shown as three numbers: BMAD review passes / rounds used / human reviews. Rounds are counted from the lap's own record when this machine has it, else from the commits CI judged after the first. Passes are counted from the plan's Review Triage Log, followed by its findings (found, patched, deferred) when the table can be read.
+- A merged pull request counts as done.
+- Anything the board cannot read is shown as a banner at the top.
 - It uses your own `gh` login (or `GITHUB_TOKEN`) for pull requests and checks; without either it shows Git only. On GitHub Enterprise it takes the host from `origin` and asks `gh` for that host's login; `GITHUB_SERVER_URL` and `GITHUB_API_URL` override it.
 - Each lap's worktree, and the branch checked out in this folder, is read from its working tree, so a running lap shows its plan before it is pushed. Its card names the worktree (`⌂ story-1.3`, the full path on hover and in the drawer) and says when a file there last changed.
 - It binds `127.0.0.1` only.
@@ -203,6 +196,8 @@ Then open `http://127.0.0.1:8765`. It shows the same tickets as columns of cards
 ## Calibrate the judge
 
 After two or three tickets, add deliberate defects (see `harness/mutations/README.md`) and run the `calibrate` workflow from the Actions tab, or `bash harness/calibrate.sh` locally.
+
+Until then, `calibrate` is green with `NOTICE: no defects in harness/mutations/ yet. Nothing was calibrated.` That green proves only that the workflow runs; the judge is not calibrated until a run lists each defect as `CAUGHT`.
 
 ## What to record
 
@@ -268,7 +263,6 @@ Either way the judge posts the same three results the workflows post, as commit 
 - **The token:** `FACTORY_JUDGE_TOKEN`, else your `gh` login. It needs Pull requests read and write and Commit statuses write, and must never reach a lap. The gate runs pull request code with no token in its environment; still, run the judge on a machine where nothing else secret is reachable.
 - **Its records:** verdicts and gate logs are kept in `.factory/judge/` in its clone (ignored by Git).
 - **`calibrate`:** run `bash harness/calibrate.sh` in the judge's clone.
-- **The board** on the `board` branch is not rebuilt; use the live board (`python harness/board/serve.py`).
 - **Branch protection:** once the judge has posted each status once, require all three: `gates`, `protected-paths` and `scope-guard`. Then a pull request cannot merge until the judge has passed it, whether you run the judge on demand or keep it running.
 
 When the judge is not running, nothing is judged. Then run `bash harness/run-gates.sh` on the lap's branch yourself, and read its changed files against the patterns in `harness/judge/guards.json`, before you merge.

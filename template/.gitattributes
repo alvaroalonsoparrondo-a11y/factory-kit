@@ -1,3 +1,29 @@
+# Line endings. The factory's files keep LF on every machine, so Git for Windows
+# (core.autocrlf=true) neither warns about them nor rewrites them, and bash runs the
+# scripts. The project's own code is left to its own settings, except *.sh and *.yml.
 *.sh text eol=lf
 *.yml text eol=lf
+/harness/** text eol=lf
+/.github/** text eol=lf
+/_bmad/custom/** text eol=lf
+/.claude/settings.json text eol=lf
+/.claude/launch.json text eol=lf
+/.claude/skills/lap/** text eol=lf
+/.claude/skills/triage/** text eol=lf
+/.kiro/agents/** text eol=lf
+/.kiro/skills/lap/** text eol=lf
+/.kiro/skills/triage/** text eol=lf
+/AGENTS.md text eol=lf
+/CLAUDE.md text eol=lf
+/FACTORY_RULES.md text eol=lf
+/RUNBOOK.md text eol=lf
+/MODIFYING.md text eol=lf
+/MISSION.md text eol=lf
+/README.md text eol=lf
+/PROJECT_NOTES.md text eol=lf
+/kit.lock.json text eol=lf
+/.gitattributes text eol=lf
+/.gitignore text eol=lf
+
+# Merge drivers
 _bmad-output/**/deferred-work.md merge=union

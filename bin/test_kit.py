@@ -189,6 +189,19 @@ class LocalChangeTests(Base):
         self.assertEqual(code, 0, text)
         self.assertFalse((self.proj / "harness/rounds.json").exists())
 
+    def test_kit_removes_a_workflow(self):  # issue #40: board.yml must leave projects that have it
+        wf = self.kit / "template/.github/workflows"
+        victim = sorted(wf.glob("*.yml"))[0].name
+        self.assertTrue((self.proj / ".github/workflows" / victim).exists())
+        (wf / victim).unlink()
+        commit_all(self.kit, "drop a workflow", when=1_000_300)
+        code, text = self.run_kit("sync")
+        self.assertEqual(code, 0, text)
+        self.assertFalse((self.proj / ".github/workflows" / victim).exists())
+        self.assertTrue((self.proj / ".github/CODEOWNERS").exists())
+        lock = json.loads((self.proj / "kit.lock.json").read_text())
+        self.assertNotIn(f".github/workflows/{victim}", lock["files"])
+
 
 class FenceTests(Base):
     def setUp(self):
@@ -396,7 +409,11 @@ class SmallTests(Base):
         lf = p.read_bytes().replace(b"\r\n", b"\n")
         flipped = lf if b"\r\n" in p.read_bytes() else lf.replace(b"\n", b"\r\n")  # the other line ending
         p.write_bytes(flipped)
+        # .gitattributes pins the kit's files to LF; a project made before it may still hold CRLF.
+        (self.proj / ".git/info").mkdir(exist_ok=True)
+        (self.proj / ".git/info/attributes").write_text("RUNBOOK.md -text\n")
         commit_all(self.proj, "line endings", when=1_000_300)
+        self.assertIn("i/crlf" if b"\r\n" in flipped else "i/lf", git(self.proj, "ls-files", "--eol", "RUNBOOK.md"))
         self.assertIn("nothing to do", self.run_kit("sync")[1])
 
     def test_sync_refuses_a_dirty_project_or_kit(self):

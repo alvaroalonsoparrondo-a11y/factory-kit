@@ -2,6 +2,44 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-24 — The GitHub board is gone; the live board is the only board (issue #40)
+
+There were two boards. The `board` workflow built `BOARD.md` and `board.json` on an orphan `board` branch; `serve.py` reads the same inputs on your machine and also sees unpushed laps, stops and quiet laps. The GitHub board showed less, had already disagreed with the live board (CI's "Start the lap" against the live "Triage it"), and cost a workflow run and a commit on almost every repository event.
+
+- **Removed:** `template/.github/workflows/board.yml`. `kit.py sync` already deletes a file the kit dropped when the project did not change it; a new test proves it for a workflow, so projects that have `board.yml` (`factory-pilot`, `factory-pilot-2`) lose it on their next sync.
+- **`harness/board/board.py`:** `render_markdown` and `--out` are gone. The module stays: `serve.py`, `triage.py`, `dispatch.py` and `judge.py` import it. Its command line now prints the derived board as JSON (the same shape the live board serves as `/board.json`), for checking what it derives.
+- **The `harness/board` tests** ran only in `board.yml`. They now run in `gates.yml`, before the gates, so a pull request that changes `harness/board/` is tested before it merges. Where Actions is not allowed, `judge.py` runs only `run-gates.sh` with `harness/` from `main`, so these tests are not part of its verdict; run them by hand when you change `harness/board/`.
+- **RUNBOOK:** "Follow the tickets" is now the live board. The line under "Without GitHub Actions" about the `board` branch is gone.
+- **Seed `README.md`:** the board row points to `serve.py` instead of `blob/board/BOARD.md`. Existing projects own their `README.md`; change that row by hand.
+- **Design spec** `2026-11-17-ticket-board-v2-design.md`: a note says the GitHub board is history.
+- **For each existing project:** the `board` branch stays until a human deletes it: `git push origin --delete board`. The kit does not do this.
+- **Tests:** the Markdown tests became checks on the derived rows, plus one test of the JSON command line; one sync test.
+
+## 2026-11-24 — `.gitattributes` keeps the factory's files LF on Windows (issue #25)
+
+Seen while setting up `factory-pilot-2` (kit `b9de8ba`), step 3: with Git for Windows' `core.autocrlf=true`, the first commit warned "LF will be replaced by CRLF" for 48 of the kit's files, because `.gitattributes` pinned only `*.sh` and `*.yml`. Cosmetic today (`kit.py` hashes with line endings normalised), but it hides real warnings.
+
+- **`template/.gitattributes`** pins `text eol=lf` for every path the kit writes: `harness/`, `.github/`, `_bmad/custom/`, the fence files, both agents' `lap` and `triage` skills, the top-level factory files, the seeds and `kit.lock.json`. The project's own code is left to its own settings, as before (except `*.sh` and `*.yml`).
+- **Checked:** `kit.py init` into an empty repository with `core.autocrlf=true`, then `git add -A`: 48 warnings before, none after; `git ls-files --eol` shows all 54 files as LF text.
+- **Tests:** `kit.py`'s CRLF test can no longer commit a CRLF `RUNBOOK.md` through the project's `.gitattributes`, so it overrides the attribute in `.git/info/attributes`, as a project made before this change would hold it.
+
+## 2026-11-24 — Setup says a new project's `calibrate` calibrates nothing yet (issue #27)
+
+Seen while setting up `factory-pilot-2`, step 6: `calibrate` succeeded with "NOTICE: no defects in harness/mutations/ yet. Nothing was calibrated." `AGENT_SETUP.md` asked only for `success`, so the report read as if the judge was calibrated.
+
+- **`AGENT_SETUP.md` step 6:** on a new project the two greens prove only that the workflows run. Read the `calibrate` log; with that notice, report "runs; nothing calibrated yet". Step 8's table says the same.
+- **RUNBOOK, "Calibrate the judge":** the same, for a person.
+
+## 2026-11-24 — Setup writes the project's setup status (issue #28)
+
+Seen while setting up `factory-pilot-2`, step 8: the seed `PROJECT_NOTES.md` had a "Setup status" checkbox for "steps 1 to 6 in `RUNBOOK.md`" that nothing filled in, and whose numbers were not `AGENT_SETUP.md`'s.
+
+- **Seed `PROJECT_NOTES.md`:** the checkbox is replaced by a paragraph saying who fills the section in and with what.
+- **`AGENT_SETUP.md` step 8** ("Record the setup, then report"): before the report, the agent replaces that paragraph with the date, kit commit and BMAD version, a line per `RUNBOOK.md` one-time setup step 1 to 6 (done, or open with how to finish it), the `calibrate` result and `doctor`'s `open:` lines; it commits and pushes. If step 7's protection refuses the push, it opens a `setup/status` pull request instead.
+- **RUNBOOK one-time setup, step 6:** a person setting up by hand writes the same section.
+- **Existing projects** own their `PROJECT_NOTES.md`; nothing changes there.
+- **Not covered:** no agent setup has run with the new step 8 yet.
+
 ## 2026-11-24 — Refining a ticket goes straight to `main`, with no pull request (from `factory-pilot-2`)
 
 Seen in `factory-pilot-2`: `refine 1.3` ended in a planning pull request (#12) that needed a judge run and a merge before triage could see the ticket. The RUNBOOK says a prepared ticket is committed on `main` and pushed, but Sofia's rule in `bmad-agent-po.toml` still sent all planning work through `planning/<step>` pull requests. "Every lap runs in its own worktree" changed the RUNBOOK and left the toml behind, and the RUNBOOK's "Plan the product" section said `main` takes changes only through pull requests.

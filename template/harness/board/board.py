@@ -3,9 +3,12 @@
 
 Part of the judge. Human-owned. Standard library only (Python 3.11+).
 
-  python3 harness/board/board.py --out <dir>             collect, then write BOARD.md and board.json
-  python3 harness/board/board.py --out <dir> --snapshot f.json   skip collection, use recorded inputs
+  python3 harness/board/board.py                          collect, then print the board as JSON
+  python3 harness/board/board.py --snapshot f.json        skip collection, use recorded inputs
   python3 harness/board/board.py --dump-snapshot f.json   also save the collected inputs
+
+The board people look at is the live one, harness/board/serve.py, which imports this
+module. This command line is for checking what the board derives.
 
 Environment for collection: GITHUB_REPOSITORY (owner/name), GITHUB_TOKEN,
 GITHUB_API_URL (default https://api.github.com), GITHUB_SERVER_URL (default https://github.com).
@@ -31,7 +34,6 @@ import lap_round  # noqa: E402  (the lap's round budget, read from its signals)
 CHECKS = ("gates", "protected-paths", "scope-guard")
 GUARDS = ("protected-paths", "scope-guard")
 PLAN_STATUSES = ("draft", "ready-for-dev", "in-progress", "in-review", "built", "done", "blocked", "dropped")
-MARK = {"green": "✅", "red": "❌", "running": "⏳", "missing": "➖"}
 BMAD_DIR = "_bmad-output"
 
 
@@ -590,60 +592,6 @@ def findings_text(f):
     return f"{f['found']} found, {f['patched']} patched, {f['deferred']} deferred"
 
 
-STATUS_ORDER = ("needs you", "blocked", "quiet", "running", "ready", "untriaged", "waiting", "done", "dropped")
-
-
-def render_markdown(board):
-    name = board["repo"].split("/")[-1]
-    order = STATUS_ORDER
-    summary = " · ".join(f"{board['counts'][s]} {s}" for s in order if board["counts"].get(s))
-    out = [f"# Board: {_cell(name)}", "", f"Built from `main` at `{board['main_sha']}`" + (f" · {summary}" if summary else ""), ""]
-
-    if not board["epics"]:
-        out += ["No tickets yet. The board fills in once a `tickets.toml` is on `main`.", ""]
-
-    asks = [r for e in board["epics"] for r in e["rows"] if r["needs_you"]]
-    out.append("## Needs you now")
-    out.append("")
-    for r in asks:
-        where = f" → [#{r['pr']['number']}]({r['pr']['url']})" if r["pr"] else ""
-        out.append(f"- **{_cell(r['epic'])} #{r['id']}** {_cell(r['title'])}: {_cell(r['needs_you'])}{where}")
-    if not asks:
-        out.append("Nothing.")
-    out.append("")
-
-    for epic in board["epics"]:
-        out += [f"## {_cell(epic['name'])}", "",
-                "| # | Ticket | Stage | Status | Needs you | Checks | Reviews B/F/H | PR |",
-                "|---|---|---|---|---|---|---|---|"]
-        for r in epic["rows"]:
-            needs = _cell(r["needs_you"]) if r["needs_you"] else "–"
-            if r["status"] == "waiting":
-                needs = "– (after " + ", ".join(f"#{a}" for a in r["waiting_on"]) + ")"
-            if not r["needs_you"] and r.get("triage_hint"):
-                needs = f"– ({_cell(r['triage_hint'])})" if r["status"] != "waiting" else needs + f" · {_cell(r['triage_hint'])}"
-            checks = "–"
-            if r["checks"]:
-                checks = "".join(MARK[r["checks"][c]] for c in CHECKS)
-            rv = r["reviews"]
-            reviews = f"{rv['bmad']}/{rv['fix_rounds']}/{rv['human']}" if rv else "–"
-            if rv and rv.get("findings"):
-                reviews += " · " + findings_text(rv["findings"])
-            pr = f"[#{r['pr']['number']}]({r['pr']['url']})" if r["pr"] else "–"
-            out.append(f"| {r['id']} | {_cell(r['title'])} | {r['stage']} | {r['status']} | {needs} | {checks} | {reviews} | {pr} |")
-        out.append("")
-
-    out += ["## Problems", ""]
-    out += [f"- {p}" for p in board["problems"]] or ["None."]
-    out += ["", "---", "",
-            "Checks, in order: `gates`, `protected-paths`, `scope-guard` "
-            f"({MARK['green']} green, {MARK['red']} red, {MARK['running']} running, {MARK['missing']} not reported). "
-            "Reviews: BMAD review passes / rounds (every fix that was checked again, against the lap's budget in "
-            "`harness/rounds.json`) / human reviews, then the findings in the plan's triage log. "
-            "Built by the `board` workflow; do not edit by hand.", ""]
-    return "\n".join(out)
-
-
 def render_json(board):
     return json.dumps(board, indent=2, ensure_ascii=False) + "\n"
 
@@ -652,7 +600,6 @@ def render_json(board):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Build the ticket board.")
-    ap.add_argument("--out", help="folder to write BOARD.md and board.json into")
     ap.add_argument("--snapshot", help="use recorded inputs instead of collecting")
     ap.add_argument("--dump-snapshot", help="save the collected inputs to this file")
     ap.add_argument("--root", default=".", help="the repository (default: current folder)")
@@ -674,15 +621,9 @@ def main(argv=None):
     if args.dump_snapshot:
         Path(args.dump_snapshot).write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
 
-    board = derive(snapshot)
-    if args.out:
-        out = Path(args.out)
-        out.mkdir(parents=True, exist_ok=True)
-        (out / "BOARD.md").write_text(render_markdown(board), encoding="utf-8", newline="\n")
-        (out / "board.json").write_text(render_json(board), encoding="utf-8", newline="\n")
-    else:
+    if hasattr(sys.stdout, "reconfigure"):  # titles may not be ASCII; a Windows console is not UTF-8
         sys.stdout.reconfigure(encoding="utf-8")
-        print(render_markdown(board))
+    sys.stdout.write(render_json(derive(snapshot)))
     return 0
 
 

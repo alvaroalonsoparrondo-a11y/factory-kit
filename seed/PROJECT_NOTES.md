@@ -4,4 +4,4 @@ What this project adds to [RUNBOOK.md](RUNBOOK.md): who runs it, its setup statu
 
 ## Setup status
 
-- [ ] One-time setup steps 1 to 6 in `RUNBOOK.md`.
+Not set up yet. Whoever sets the project up replaces this paragraph: the date and kit commit, then what is done and what is still open (for example branch protection, GitHub Actions, the active BMAD initiative), each with how to finish it. An agent setup writes it in `AGENT_SETUP.md` step 8; by hand, after `RUNBOOK.md`'s one-time setup. When an open item is done, change its line.

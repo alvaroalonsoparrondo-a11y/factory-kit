@@ -2,6 +2,8 @@
 
 Date: 2026-11-17, rewritten 2026-11-18. Status: waiting for approval. Home: `factory-kit`.
 
+> **Note, 2026-11-24 (issue #40):** the GitHub board has since been removed: the `board` workflow, `BOARD.md` and the `board` branch. The live board is the only board. What this spec says about the GitHub board, `BOARD.md` and the `board` workflow is history; the `harness/board` tests now run in the `gates` workflow.
+
 Builds on the ticket board (first designed on 2026-11-16) and on the live board (`harness/board/serve.py` and `dashboard.html`) that came from `factory-pilot` on 2026-11-18. Both boards stay:
 
 - **GitHub board** (`BOARD.md` on the `board` branch, built by CI): for the team. It shows what is pushed.
