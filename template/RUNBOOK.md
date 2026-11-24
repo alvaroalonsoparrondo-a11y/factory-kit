@@ -70,6 +70,18 @@ A decision is `docs/triage/<ref>.json` on `main`, written by `python harness/boa
 
 By hand: in a session on an up-to-date `main` (not a lap worktree), say `triage 1.3`; it offers to record the decision and, on your yes, commits it to `main` for you (`record --push`). The dispatcher does it for you (below): while ticket N builds, it triages N+1, so the questions for N+1 reach you before N merges, and it triages N+1 again when N merges and changes its files.
 
+### Prepare the next ticket while a lap runs
+
+To keep a lap from stopping for you, settle a ticket's "what" before its lap starts. Then the lap never asks you anything about it, not even to approve its plan.
+
+1. While another lap runs, refine the ticket with the product owner, in a session on `main`: `refine 1.3`. Sofia writes its ticket file beside `tickets.toml` with numbered criteria and Boundaries. When you approve them, she sets `refined: true`: that is your approval of the "what".
+2. Commit it to `main`. The change makes the ticket's triage stale, so it is triaged again.
+3. A fresh `ready-to-implement` on a `refined: true` ticket makes it **prepared**: `python harness/board/triage.py 1.3 check` prints `prepared: <ticket file>`, and its card on the live dashboard says `prepared`.
+
+A prepared ticket's lap copies your criteria into the plan and approves its own plan, whatever the ticket's `risk`. If its plan raises a question about what the ticket should do anyway, the lap does not wait: it **hands the ticket back**. That means it marks the ticket blocked on `main` with the questions (`Handed back by the lap: …`), deletes its branch, and ends without a pull request. The questions show under **Needs you**. Answer them in the ticket, clear the block (`tickets.py mark 1.3 draft`), and commit both to `main`. The ticket is triaged and built again. The dispatcher frees the lap's worktree; after a hand-started lap, remove it yourself.
+
+A ticket you did not prepare works as before: triage's rules apply, and otherwise you approve the plan at the checkpoint. To change the "what" of a ticket whose lap is running, stop the lap; the lap reads the ticket once, at its start.
+
 ## Run laps
 
 In an agent session opened in this folder. With Kiro, start it as the factory agent, so the fence applies:

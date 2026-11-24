@@ -2,6 +2,29 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-24 — Early intent approval: a prepared ticket's lap never waits for the human (from `factory-pilot-2`)
+
+Seen in `factory-pilot-2`: the human reviewed each lap's plan while the lap ran, because `bmad-build`'s CHECKPOINT 1 waited for them. Triage lets a small, clear ticket's lap approve its own plan, but any ticket needing a decision still stopped mid-lap. Design: [docs/specs/2026-11-24-early-intent-approval-design.md](docs/specs/2026-11-24-early-intent-approval-design.md); plan: [docs/plans/2026-11-24-early-intent-approval-plan.md](docs/plans/2026-11-24-early-intent-approval-plan.md).
+
+The human settles a ticket's "what" before its lap, in the ticket (Sofia's refine, `refined: true`). The lap writes the "how" against the code as it finds it. A ticket is **prepared** when its leaf file says `refined: true` and its triage is a fresh `ready-to-implement`.
+
+- **`triage.py`:**
+  - `prepared()` returns the leaf file's path for a prepared ticket, else nothing; `statuses()` carries it.
+  - `check` prints `prepared: <leaf path>` in place of the `plan:` line. Its output for any other ticket is unchanged.
+- **Lap skill** (both copies):
+  - Step 3 recognises a prepared ticket.
+  - Step 6: the plan's locked block carries the leaf's criteria and Boundaries word for word. The lap approves the plan whatever the `risk`, and puts `Plan approved by prepared ticket (<leaf>)` in the commit message.
+  - New section E, **hand back**: on an open question, an `intent_gap` or any other question about the intent, the lap does not wait. It marks the ticket blocked on `main` (`Handed back by the lap: <questions>`), deletes its branch and ends, with no pull request and no round. Stops that are not about intent (the machine, a usage limit, the round budget) are signalled as before.
+- **`_bmad/custom/bmad-build.toml`:** the same rule, from `bmad-build`'s side: copy the criteria, approve with no Open Questions, otherwise halt back to the lap, never ask.
+- **Dispatcher:**
+  - Today a blocked lap stayed in memory, so its ticket was never claimed again. A lap whose branch is gone and whose ticket `main` marks `Handed back by the lap` is now closed instead: its worktree is removed, a lap-report line is written, and the questions go to Needs you.
+  - Once the human answers and clears the block, the ticket is triaged and claimed again.
+- **Live dashboard:** a prepared ticket's card says `prepared`; its drawer says the lap approves the plan. The CI board is unchanged.
+- **RUNBOOK:** "Prepare the next ticket while a lap runs".
+- **Unchanged:** a ticket that was not prepared, including triage's existing self-approval for clear, low-risk tickets.
+- **Tests:** 4 triage tests, 5 dispatcher tests. The dashboard cards were checked by running the page's own functions on fake rows.
+- **Not covered:** no real prepared lap or hand-back has run yet, and `bmad-build` following the new rule is untested. The first run is in `factory-pilot-2` after `kit.py sync`.
+
 ## 2026-11-24 — `AGENT_SETUP.md` step 3: `init` already runs `doctor` (issue #26)
 
 Seen while setting up `factory-pilot-2` with `AGENT_SETUP.md` (kit `b9de8ba`), the first real run of `kit.py init`: `init` already ran `doctor` and printed `doctor: OK`, and step 3 then ran `doctor` again as a separate command without saying why.

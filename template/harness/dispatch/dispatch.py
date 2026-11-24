@@ -54,6 +54,9 @@ MAX_MOVED_ROUNDS = 3
 # The factory judge begins a red `gates` the change did not cause with this (a machine failure, or main red
 # alone too): no fix round for it, it goes to the human. See harness/judge/classify.py.
 NOT_THIS_CHANGE = "Not this change:"
+# A prepared ticket's lap that would wait for the human about the ticket's intent gives it back instead: it
+# marks the ticket blocked on main with this reason and deletes its branch (lap skill, section E).
+HANDED_BACK = "Handed back by the lap"
 JUDGE_MARKER = "<!-- factory-judge:gates -->"  # the factory judge's failing-gates comment (harness/judge/judge.py)
 DEFAULT_CAP = 2
 BASE_PORT = 8090  # 8080 is the human's app, 8081 a hand-started worktree lap
@@ -589,6 +592,9 @@ class Dispatcher:
             if r["stage"] == "Done":
                 self._close(ref, run, r, tickets[ref], main_plans.get(r["id"]), rep, runs)
                 continue
+            if self._handed_back(run, main_plans.get(r["id"])):
+                self._hand_back(ref, run, main_plans[r["id"]], rep, runs)
+                continue
             if run.get("halted"):
                 rep["needs_you"].append((ref, f"{run['halted']} Then `dispatch.py release {ref}`."))
                 continue
@@ -997,6 +1003,29 @@ class Dispatcher:
             f" ({', '.join(f'{k} {v}' for k, v in s['by_source'].items())})" if s["by_source"] else "")
 
     # ---- close a merged lap
+
+    def _handed_back(self, run, main_plan):
+        """The lap gave its ticket back: its branch is gone from origin and main says why."""
+        return bool(main_plan and str(main_plan.get("blocked_reason", "")).startswith(HANDED_BACK)) \
+            and self.repo.sha(f"origin/{run['branch']}") is None
+
+    def _hand_back(self, ref, run, main_plan, rep, runs):
+        """Forget a handed-back lap and free its worktree. The ticket stays blocked until a human answers;
+        changing the ticket makes its triage stale, so it is triaged and claimed again after that."""
+        reason = main_plan["blocked_reason"]
+        line = f"{dt.date.today().isoformat()} {ref} {run.get('title', '')} | handed back | {reason}"
+        if self.dry_run:
+            rep["closed"].append((ref, "would forget the lap and remove its worktree: " + line))
+            return
+        try:
+            self.repo.remove_worktree(run["worktree"], run["branch"])
+        except RuntimeError as e:
+            rep["needs_you"].append((ref, f"remove the worktree {run['worktree']} by hand: {e}"))
+        self.store.report(line)
+        rep["closed"].append((ref, line))
+        rep["needs_you"].append((ref, f"{reason}. Answer in the ticket, then clear the block "
+                                      f"(`tickets.py mark {ref} draft`); it is triaged and built again."))
+        del runs[ref]
 
     def _close(self, ref, run, r, ticket, main_plan, rep, runs):
         pr = f"PR #{r['pr']['number']}" if r.get("pr") else "no PR"

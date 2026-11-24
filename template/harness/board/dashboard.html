@@ -233,8 +233,11 @@ function card(r) {
   if (r.stage === 'Planned' && r.triage) {
     const t = r.triage
     const tip = t.fresh ? `${t.summary} (triaged ${t.triaged_at})` : `stale: ${t.why}`
-    meta.push(`<span title="${esc(tip)}">triage: ${esc(t.fresh ? t.state : 'stale')}</span>`)
-    if (t.fresh && t.state === 'ready-to-implement' && t.plan === 'human')
+    if (t.prepared)
+      meta.push(`<span title="${esc(`the human approved its "what" in ${t.prepared}; the lap approves its own plan and never waits (${tip})`)}">prepared</span>`)
+    else
+      meta.push(`<span title="${esc(tip)}">triage: ${esc(t.fresh ? t.state : 'stale')}</span>`)
+    if (t.fresh && t.state === 'ready-to-implement' && t.plan === 'human' && !t.prepared)
       meta.push('<span class="risk-high" title="a human approves the plan before the lap builds">plan: human</span>')
   }
   if (r.reviews) {
@@ -345,7 +348,8 @@ function triageBlock(r) {
   const list = (label, xs) => xs?.length
     ? `<div class="t-label">${label}</div><ul>${xs.map((x) => `<li>${inline(x)}</li>`).join('')}</ul>` : ''
   const head = [`<span class="t-state ${t.fresh ? '' : 'stale'}">${esc(t.state)}${t.fresh ? '' : ' · stale'}</span>`]
-  if (t.plan) head.push(`<span>plan approved by: ${t.plan === 'human' ? 'a human' : 'the lap'}</span>`)
+  if (t.prepared) head.push(`<span>plan approved by: the lap (prepared: ${esc(t.prepared)})</span>`)
+  else if (t.plan) head.push(`<span>plan approved by: ${t.plan === 'human' ? 'a human' : 'the lap'}</span>`)
   if (t.triaged_at) head.push(`<span>triaged ${esc(t.triaged_at)}</span>`)
   return `<div class="triage">
     <div class="t-head">${head.join('')}</div>
