@@ -205,6 +205,10 @@ function column(r) {
   return 'build'
 }
 
+// A lap's worktree folder, by its last path part (story-1.3); the full path is in the title and the drawer.
+const treeName = (path) => String(path).split(/[\\/]/).filter(Boolean).pop() || path
+const ago = (min) => (min < 1 ? 'just now' : min < 60 ? `${min} min ago` : `${Math.floor(min / 60)} h ${min % 60} min ago`)
+
 // A prerequisite is an entry id in the same epic; show it as that ticket's ref (2 -> 1.2).
 function refOf(epic, id) {
   const e = board.epics.find((x) => x.name === epic)
@@ -226,6 +230,7 @@ function card(r) {
   const links = []
   if (r.pr) links.push(`<a href="${esc(r.pr.url)}" target="_blank" rel="noopener">PR #${esc(r.pr.number)}</a>`)
   if (r.branch) links.push(`<span class="branch">${esc(r.branch)}</span>`)
+  if (r.worktree) links.push(`<span class="branch" title="${esc(r.worktree)}">⌂ ${esc(treeName(r.worktree))}</span>`)
   const checks = r.checks
     ? `<div class="checks">${CHECKS.map((c) => `<span class="chip ${esc(r.checks[c])}" title="${esc(c)}: ${esc(r.checks[c])}">${CHECK_LABEL[c]}</span>`).join('')}</div>` : ''
   const meta = []
@@ -249,6 +254,8 @@ function card(r) {
     const n = r.human_wait.stops
     meta.push(`<span title="time the lap said it waited for you">${n} stop${n === 1 ? '' : 's'} · ${Math.floor(r.human_wait.seconds / 60)} min</span>`)
   }
+  if (live && r.last_change_minutes != null && r.quiet_minutes == null)
+    meta.push(`<span title="the last file change in the lap's worktree ${esc(r.worktree)}">changed ${esc(ago(r.last_change_minutes))}</span>`)
   const say = r.needs_you && !next ? r.needs_you : r.triage_hint
   const hint = say ? `<div class="hint">${inline(say)}</div>` : ''
   return `
@@ -326,6 +333,8 @@ async function refreshDrawer() {
   const links = []
   if (r.pr) links.push(`<a href="${esc(r.pr.url)}" target="_blank" rel="noopener">PR #${esc(r.pr.number)}</a>`)
   if (r.branch) links.push(`<span class="branch">${esc(r.branch)}</span>`)
+  if (r.worktree) links.push(`<span class="branch">worktree ${esc(r.worktree)}${
+    r.last_change_minutes != null ? ` · last change ${esc(ago(r.last_change_minutes))}` : ''}</span>`)
   setHTML('d-links', links.join(''))
   setHTML('d-triage', triageBlock(r))
 

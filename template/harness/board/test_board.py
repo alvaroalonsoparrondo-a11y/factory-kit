@@ -470,5 +470,26 @@ class Triage(unittest.TestCase):
         self.assertEqual((row(board, 1)["plan_status"], row(board, 2)["plan_status"]), ("ready-for-dev", ""))
 
 
+class Worktrees(unittest.TestCase):
+    """Every lap runs in its own worktree; the live board says which, and when a file there last changed."""
+
+    def snap_with_tree(self, idle=245):
+        s = snap([ticket(1)], {"main": [], "story/1": [plan(1, "in-progress")]}, ["story/1"])
+        s["worktrees"] = {"story/1": "/work/pilot-wt/story-1"}
+        s["activity"] = {"idle_seconds": {"story/1": idle}, "quiet_seconds": 600}
+        return s
+
+    def test_a_lap_shows_its_worktree_and_last_change(self):
+        r = row(b.derive(self.snap_with_tree()), 1)
+        self.assertEqual((r["worktree"], r["last_change_minutes"]), ("/work/pilot-wt/story-1", 4))
+
+    def test_without_worktrees_in_the_snapshot_nothing_is_shown(self):
+        r = row(b.derive(snap([ticket(1)], {"main": [], "story/1": [plan(1, "in-progress")]}, ["story/1"])), 1)
+        self.assertEqual((r["worktree"], r["last_change_minutes"]), (None, None))
+
+    def test_a_quiet_lap_still_says_quiet(self):
+        r = row(b.derive(self.snap_with_tree(idle=900)), 1)
+        self.assertEqual((r["status"], r["last_change_minutes"]), ("quiet", 15))
+
 if __name__ == "__main__":
     unittest.main()

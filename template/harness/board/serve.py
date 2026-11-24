@@ -347,6 +347,9 @@ class Source:
         snap["signals"] = signals
         snap["branch_times"] = branch_times(self.root)
         snap["activity"] = {"idle_seconds": idle, "quiet_seconds": self.quiet_seconds}
+        # Where each lap runs: every lap has its own worktree (the lap skill), the main checkout stays on main.
+        snap["worktrees"] = {ref: str(folder) for ref, folder in trees.items()
+                             if ref.startswith("story/") and Path(folder) != Path(self.root)}
         return snap
 
     def refresh(self):

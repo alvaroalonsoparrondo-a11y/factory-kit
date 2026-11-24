@@ -2,6 +2,24 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-24 — Every lap runs in its own worktree (from `factory-pilot-2`)
+
+Seen in `factory-pilot-2`: lap 1.2 ran in the main checkout, on `story/1.2`. That left the human nowhere to prepare ticket 1.3, because Sofia commits on the branch her session is on. A planning worktree managed by hand was rejected as busywork: the lap should own its worktree.
+
+- **Lap skill** (both copies):
+  - Every lap makes its own worktree, `../<project>-wt/story-<ticket-id>`, the same path the dispatcher uses. It works only there; `bmad-build` gets that worktree as its project root.
+  - The main checkout's state no longer matters to a lap, and it stays on `main`.
+  - The gate port defaults to 8081.
+  - A fix round finds the worktree by its branch, or makes it again from the pushed branch.
+  - Section C removes the worktree and the local branch after the merge. A hand-back (section E) removes it too, in a hand-started lap.
+- **Live dashboard:**
+  - `serve.py` puts each lap's worktree in the snapshot. A row carries `worktree` and `last_change_minutes`.
+  - A card shows `⌂ story-<ref>`, with the full path on hover, and, while it runs, "changed N min ago". The drawer shows the full path and the last change.
+  - Plans, signals and quiet time were already read from every worktree. The CI board is unchanged.
+- **RUNBOOK:** "Every lap runs in its own worktree" replaces "A big lap in a worktree". Preparing a ticket now happens in the main checkout, on `main`, with a plain `git push`.
+- **Tests:** 3 board tests. The card was checked by running the page's own code on a fake row.
+- **Not covered:** a real hand-started lap working from a session opened in the main checkout. Claude Code resets a `cd` that leaves the session's folders, so the lap must `cd` in every command, or use absolute paths; this is untested.
+
 ## 2026-11-24 — Early intent approval: a prepared ticket's lap never waits for the human (from `factory-pilot-2`)
 
 Seen in `factory-pilot-2`: the human reviewed each lap's plan while the lap ran, because `bmad-build`'s CHECKPOINT 1 waited for them. Triage lets a small, clear ticket's lap approve its own plan, but any ticket needing a decision still stopped mid-lap. Design: [docs/specs/2026-11-24-early-intent-approval-design.md](docs/specs/2026-11-24-early-intent-approval-design.md); plan: [docs/plans/2026-11-24-early-intent-approval-plan.md](docs/plans/2026-11-24-early-intent-approval-plan.md).

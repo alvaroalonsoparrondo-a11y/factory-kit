@@ -74,19 +74,12 @@ By hand: in a session on an up-to-date `main` (not a lap worktree), say `triage 
 
 To keep a lap from stopping for you, settle a ticket's "what" before its lap starts. Then the lap never asks you anything about it, not even to approve its plan.
 
-1. Prepare in a planning worktree of `origin/main`, never on a lap's branch: Sofia commits on whatever branch her session is on, and a ticket change on a lap's branch would only reach `main` inside that lap's pull request (and trip its scope check).
-
-   ```bash
-   git fetch origin
-   git worktree add --detach ../<project>-plan origin/main
-   ```
-
-   Open an agent session in `../<project>-plan`. Reuse it for the next ticket after `git fetch origin && git switch --detach origin/main` there.
-2. Refine the ticket with the product owner there: `refine 1.3`. Sofia writes its ticket file beside `tickets.toml` with numbered criteria and Boundaries. When you approve them, she sets `refined: true`: that is your approval of the "what". She commits; she never pushes.
-3. Push it to `main`: `git push origin HEAD:main` (if `main` moved, `git pull --rebase origin main` first; never force). Triage and the dispatcher read tickets only from `origin/main`, so until then the factory still sees the old ticket. The change makes the ticket's triage stale, so it is triaged again: by the dispatcher on its next pass, or by you with `triage 1.3` in the same worktree.
+1. Prepare in this folder, on an up-to-date `main` (`git switch main && git pull`). Every lap runs in its own worktree (see Run laps), so this folder is free for planning. Sofia commits on whatever branch her session is on, so never prepare inside a lap's worktree: a ticket change there would only reach `main` inside that lap's pull request (and trip its scope check).
+2. Refine the ticket with the product owner: `refine 1.3`. Sofia writes its ticket file beside `tickets.toml` with numbered criteria and Boundaries. When you approve them, she sets `refined: true`: that is your approval of the "what". She commits; she never pushes.
+3. Push it to `main`: `git push` (if `main` moved, `git pull --rebase` first; never force). Triage and the dispatcher read tickets only from `origin/main`, so until then the factory still sees the old ticket. The change makes the ticket's triage stale, so it is triaged again: by the dispatcher on its next pass, or by you with `triage 1.3` in this folder.
 4. A fresh `ready-to-implement` on a `refined: true` ticket makes it **prepared**: `python harness/board/triage.py 1.3 check` prints `prepared: <ticket file>`, and its card on the live dashboard says `prepared`.
 
-A prepared ticket's lap copies your criteria into the plan and approves its own plan, whatever the ticket's `risk`. If its plan raises a question about what the ticket should do anyway, the lap does not wait: it **hands the ticket back**. That means it marks the ticket blocked on `main` with the questions (`Handed back by the lap: …`), deletes its branch, and ends without a pull request. The questions show under **Needs you**. Answer them in the ticket, clear the block (`tickets.py mark 1.3 draft`), and commit both to `main`. The ticket is triaged and built again. The dispatcher frees the lap's worktree; after a hand-started lap, remove it yourself.
+A prepared ticket's lap copies your criteria into the plan and approves its own plan, whatever the ticket's `risk`. If its plan raises a question about what the ticket should do anyway, the lap does not wait: it **hands the ticket back**. That means it marks the ticket blocked on `main` with the questions (`Handed back by the lap: …`), deletes its branch, and ends without a pull request. The questions show under **Needs you**. Answer them in the ticket, clear the block (`tickets.py mark 1.3 draft`), and commit both to `main`. The ticket is triaged and built again. The lap's worktree is removed: by the dispatcher, or by a hand-started lap itself.
 
 A ticket you did not prepare works as before: triage's rules apply, and otherwise you approve the plan at the checkpoint. To change the "what" of a ticket whose lap is running, stop the lap; the lap reads the ticket once, at its start.
 
@@ -108,13 +101,15 @@ To make it the default here, set `chat.defaultAgent` to `factory` in Kiro's sett
    - Red: copy the failing check's name and output, paste it into the session.
 4. After the walking skeleton merges: commit an empty `harness/skeleton.lock` (a factory change, by you).
 
-### A big lap in a worktree
+### Every lap runs in its own worktree
 
-To keep working in this folder while a big lap runs, start the lap in a Claude Code session that has its own worktree (in the desktop app, a new session with a worktree) and say `lap <ticket id>` there. The lap branches `story/<ticket id>` from `origin/main`, runs its gates on port 8081 (8080 stays free for you), and opens its pull request as usual. Then:
+You start a lap from a session in this folder, but the lap never works in it: it makes its own worktree, `../<project>-wt/story-<ticket id>`, branches `story/<ticket id>` there from `origin/main`, and does all its work there, gates on port 8081 (8080 stays free for you). This folder stays on `main`, so you prepare the next tickets here while laps run. The live dashboard shows each running lap's worktree on its card, with when a file there last changed. Then:
 
 - If you push to `main` while it runs, it merges `origin/main` into its branch before it pushes. Tell it `main moved` if its pull request falls behind later.
-- After you merge, tell that session `merged`. It marks the ticket done straight onto `main`. Archive the session to remove the worktree.
+- After you merge, tell that session `merged`. It marks the ticket done straight onto `main`, then removes its worktree and the local branch.
+- A fix round (you paste a failing check) finds the lap's worktree by its branch, or makes it again from the pushed branch.
 - The first gate run in a new worktree is slow: it has its own `node_modules` and `backend/target`.
+- A session the desktop app opened in a worktree of its own still works: the lap makes its worktree next to the main checkout all the same. Archive that session when the lap is done.
 
 ### The dispatcher: laps claimed, routed and closed for you
 
@@ -198,7 +193,7 @@ python harness/board/serve.py
 Then open `http://127.0.0.1:8765`. It shows the same tickets as columns of cards (Backlog, Build, Review, CI, Needs you, Done), refreshes every few seconds, and opens a ticket's entry, plan, epic and pull request text when you click its card.
 
 - It uses your own `gh` login (or `GITHUB_TOKEN`) for pull requests and checks; without either it shows Git only. On GitHub Enterprise it takes the host from `origin` and asks `gh` for that host's login; `GITHUB_SERVER_URL` and `GITHUB_API_URL` override it.
-- The branch checked out in this folder is read from the working tree, so a running lap shows its plan before it is pushed.
+- Each lap's worktree, and the branch checked out in this folder, is read from its working tree, so a running lap shows its plan before it is pushed. Its card names the worktree (`⌂ story-1.3`, the full path on hover and in the drawer) and says when a file there last changed.
 - It binds `127.0.0.1` only.
 - **A lap that waits for you** goes to "Needs you" with the reason and how long it has waited, for example "Approve the plan (approval, waiting 12 min)". The lap writes this itself with `python harness/board/lap_signal.py` into `.lap/<ticket-id>.jsonl`, so it is the agent's own word, never evidence. A wait is dropped once the branch has a newer commit, or the ticket is done.
 - **Quiet** means a lap is not waiting, yet nothing in the working tree it runs in (this folder or its worktree, build output included) has changed for 10 minutes: look at the session, it may have hit a usage limit, crashed, or be stuck on a permission prompt. Change the threshold with `--quiet-minutes`. A lap in a separate clone, not a worktree, needs its own `serve.py --root <that folder>`.
