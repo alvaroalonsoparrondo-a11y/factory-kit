@@ -20,6 +20,8 @@ board and the dispatcher see the stop even if nobody reads the output:
 - exit 3 when the budget is spent: every finding so far is printed for the human;
 - exit 4 when the same source reports the same finding as the round before: the last fix did
   not fix it, and repeating it would spend the budget one symptom at a time.
+Either stop holds: every later `take`, from any source, refuses with the same exit code until a
+human's `grant`. Moving on to another check does not get past it.
 
 The record is `.lap/<ref>.jsonl`, the same file `lap_signal.py` writes, so the live board and the
 dispatcher read rounds with the lap's other signals. A `release` in the dispatcher does not reset
@@ -102,18 +104,26 @@ def take(root, ref, source, finding, now=None):
         raise ValueError("say what the check found")
     events = read(root, ref)
     s = summary(events)
+    last_grant = max((i for i, e in enumerate(events) if e.get("state") == "grant"), default=-1)
+    stop = next((e for e in reversed(events[last_grant + 1:])
+                 if e.get("state") == "waiting" and e.get("round_stop") in ("limit", "repeated")), None)
+    if stop:  # a stop this script recorded, that no human has answered with a grant
+        code = SPENT if stop["round_stop"] == "limit" else REPEATED
+        why = f"still stopped, waiting for a human: {stop.get('text')}; now {source}: {finding}"
+        lap_signal.record(root, ref, "waiting", stop.get("kind"), why, now, round_stop=stop["round_stop"])
+        return code, (f"The lap is stopped and no human has granted a round since ({stop.get('text')}). Stop the lap; "
+                      "do not move on to another check. Only `lap_round.py grant` by a human lifts the stop.")
     if s["left"] == 0:
         found = "; ".join(f"{r.get('source')}: {r.get('text')}" for r in s["rounds"])
         why = f"round budget spent ({text_of(s)}); now {source}: {finding}"
-        lap_signal.record(root, ref, "waiting", "limit", why, now)
+        lap_signal.record(root, ref, "waiting", "limit", why, now, round_stop="limit")
         return SPENT, (f"No round left: {text_of(s)}. Stop the lap. Findings so far: {found}; now {source}: "
                        f"{finding}. The product owner splits or rewrites the ticket, or a human grants a round.")
     # A human's grant after that round lets the lap try the same finding once more.
-    last_grant = max((i for i, e in enumerate(events) if e.get("state") == "grant"), default=-1)
     previous = [i for i, e in enumerate(events) if e.get("state") == "round" and e.get("source") == source]
     if previous and previous[-1] > last_grant and _norm(events[previous[-1]].get("text")) == _norm(finding):
         why = f"{source} found the same thing again after a round that fixed it: {finding}"
-        lap_signal.record(root, ref, "waiting", "decision", why, now)
+        lap_signal.record(root, ref, "waiting", "decision", why, now, round_stop="repeated")
         return REPEATED, (f"The same {source} finding came back after the round that was to fix it. Stop: the fix "
                           "did not reach the cause. A human decides whether the lap gets another round.")
     n = s["used"] + 1
