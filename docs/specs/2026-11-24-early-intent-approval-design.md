@@ -72,13 +72,13 @@ Edit the ticket before the lap, or after it ends. To change it during a lap, sto
 - **Lap skill**, step 3: say whether the ticket is prepared (leaf file `refined: true` and fresh `ready-to-implement`). Step 6: for a prepared ticket, copy the criteria into the locked section, self-approve, and hand back on an open question or intent gap (section 3). Everything else as today.
 - **`_bmad/custom/bmad-build.toml`**: for a prepared ticket, CHECKPOINT 1 is approved by the lap, and an open question or intent gap halts back to the lap instead of asking.
 - **`triage.py`** (or a small helper next to it): a `prepared` answer, so the lap and the dispatcher read it the same way.
-- **No board or dashboard changes.** A handed-back ticket already shows its questions under Needs you on the live dashboard, through its blocked reason. (The CI board is to be removed; the live dashboard stays.)
+- **Live dashboard** (`serve.py`, `dashboard.html`): a prepared ticket's card says "prepared", and the drawer says the lap will approve its own plan. A handed-back ticket already shows its questions under Needs you, through its blocked reason. No change to the CI board (`BOARD.md`, `board.yml`), which is to be removed.
 - **RUNBOOK**: a short "Prepare the next ticket while a lap runs" section.
 
 ## Left to the builder
 
 - Where `prepared` is computed (in `triage.py` or the lap skill) and its exact output.
-- The wording of the hand-back line.
+- The wording of the hand-back line and of the dashboard's "prepared" label.
 - Tests: a prepared ticket self-approves regardless of risk; an unprepared ticket keeps today's behavior; an open question on a prepared lap hands back instead of waiting.
 
 ## Calls made in this design (check these)
