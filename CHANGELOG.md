@@ -2,6 +2,12 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-24 — `AGENT_SETUP.md` step 3: `init` already runs `doctor` (issue #26)
+
+Seen while setting up `factory-pilot-2` with `AGENT_SETUP.md` (kit `b9de8ba`), the first real run of `kit.py init`: `init` already ran `doctor` and printed `doctor: OK`, and step 3 then ran `doctor` again as a separate command without saying why.
+
+- **`AGENT_SETUP.md` step 3:** the second `doctor` command is gone. The step says `init` runs `doctor` itself, and the check reads `init`'s output (exit 0, a last line starting with `doctor: OK`). `open:` lines are expected there, since BMAD, the labels and branch protection come in later steps. Step 8 still runs `doctor` as the final check.
+
 ## 2026-11-24 — The round budget: a stop holds until a human grants (issue #16)
 
 Seen while testing `harness/board/lap_round.py` in `factory-pilot`, in a scratch repository: `take gates` returned exit 4 (the same finding came back), but the very next `take review` was accepted as round 2. The stop was recorded as `waiting decision`, but nothing enforced it, so an agent that moved on to another check could spend the rest of the budget without the human's decision. The board then showed `round` records after the `waiting` signal.

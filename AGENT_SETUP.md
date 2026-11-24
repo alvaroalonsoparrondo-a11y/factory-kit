@@ -59,13 +59,12 @@ The clone is empty; Git warns about that, which is expected. If its branch is no
 ```bash
 # in PROJECT
 python KIT/bin/kit.py --kit KIT init --owner OWNER --host HOST
-python KIT/bin/kit.py --kit KIT doctor
 ```
 
-`init` copies the kit's files, the fence and the seeds (`MISSION.md`, `README.md`, `PROJECT_NOTES.md`, `.github/CODEOWNERS`, `.claude/launch.json`), fills in the names in the seeds, and writes `kit.lock.json`.
+`init` copies the kit's files, the fence and the seeds (`MISSION.md`, `README.md`, `PROJECT_NOTES.md`, `.github/CODEOWNERS`, `.claude/launch.json`), fills in the names in the seeds, and writes `kit.lock.json`. It then runs `doctor` itself, so do not run it again here; step 8 runs it once more, after BMAD and the GitHub settings.
 
 **Check:**
-- `doctor` prints `doctor: OK` (warnings are fine; read them).
+- `init` exits 0 and its last line starts with `doctor: OK` (warnings are fine; read them). `open:` lines are expected at this point: BMAD, the labels and branch protection come in later steps.
 - No file in PROJECT contains a placeholder: two underscores, then `OWNER`, `PROJECT` or `HOST`, then two underscores.
 - `kit.lock.json` exists and its `revision` is the kit commit you noted in step 1.
 - The JSON files `.claude/settings.json` and `.kiro/agents/factory.json` parse. The first has a non-empty deny list, the second a `deny` rule for `fs_write`: they are the fence that keeps Claude Code and Kiro out of the factory files. Check both whatever AGENTS is: they are factory files and stay in the project.
