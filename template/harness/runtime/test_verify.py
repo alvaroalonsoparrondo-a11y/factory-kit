@@ -163,12 +163,27 @@ class RuntimeTests(Base):
         self.assertIn("outside this attempt", why)
         self.assertIn("does not exist or is empty", why)
 
-    def test_the_build_identity_must_agree(self):
+    def test_a_miscopied_build_identity_is_malformed(self):
+        # Seen in factory-pilot 1.4: the exit code was read back with the identity, which has no newline.
         self.v.start()
-        self.verifier(candidate="not-the-build")
+        self.verifier(candidate=self.v.state()["candidate"] + "0")
+        word, why = self.v.check()
+        self.assertEqual(word, "malformed")
+        self.assertIn("copied wrong", why)
+        self.v.start()
+        self.assertEqual(self.v.state()["attempt"], 2)
+        self.assertIn("copied wrong", (Path(self.v.state()["dir"]) / "prompt.md").read_text())
+
+    def test_a_probe_that_disagrees_is_inconclusive(self):
+        self.v.start()
+        self.verifier()
+        s = self.v.state()
+        s["candidate"] = "another-build"  # the app now answers with a build other than the one expected
+        self.v.save(s)
         word, why = self.v.check()
         self.assertEqual(word, "inconclusive")
         self.assertIn("build identity disagrees", why)
+        self.assertNotEqual(self.v.state()["result"], "malformed")
 
     def test_writing_in_the_checkout_is_inconclusive(self):
         self.v.start()

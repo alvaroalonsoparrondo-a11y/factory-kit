@@ -8,7 +8,10 @@ how it was built matters: judge only what the running application does. Adapted 
 
 It is running now at `{base_url}`, started fresh for you with empty data.
 
-Its build identity, which you must record: run `{candidate_command}` and keep its output.
+Its build identity, which you must record: run `cd {attempt_dir} && {candidate_command} > build-id.txt`, then
+copy that file's text exactly into the report's `candidate`. Keep the exit code and anything else out of
+`build-id.txt`: the output has no trailing newline, so text written after it joins the identity and the
+report is rejected.
 
 ## The assertions
 
@@ -43,7 +46,7 @@ Write this JSON to `{report_path}`:
 
 ```json
 {{
-  "candidate": "<the build identity command's output, trimmed>",
+  "candidate": "<the text of build-id.txt, exactly>",
   "assertions": [
     {{
       "id": "<the assertion id, unchanged>",

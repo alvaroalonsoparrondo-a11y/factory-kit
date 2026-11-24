@@ -38,6 +38,15 @@ Seen in `factory-pilot-2`, re-testing kit `76aeda9` on ticket 1.2: after a hand 
 - **Dispatcher message and RUNBOOK:** the `--no-agents` ask in `dispatch.py` and the RUNBOOK's "by hand" line still said to commit the file; both now use `record --push`.
 - **Tests:** `test_triage.py` gains 2 tests: a push to a scratch bare origin that leaves the checkout alone and gives a fresh decision on `origin/main`, and a refused `--rev`.
 
+## 2026-11-23 — Runtime verification: a miscopied build identity gets a retry (issue #14)
+
+Seen in `factory-pilot`, ticket 1.4: the verifier judged all four assertions correctly (it caught the false one), but `verify.py check` said `inconclusive`. The verifier saved the `curl` output of `/build-id` and its exit code, and `/build-id` has no trailing newline, so the report's `candidate` read `…Z0`. The checker's own probe matched. The real verdict (`failed`, a `runtime` round) was lost, and the lap stopped for a human.
+
+- **`verify.py check`:** the probe is compared first. If the app's own build identity disagrees, it is still `inconclusive` (a wrong build). If the probe matches and only the report's `candidate` differs, the report is `malformed` ("`candidate` was copied wrong"), so the one fresh attempt applies, with the reason in its prompt.
+- **`verifier.md`:** save the identity with `curl … > build-id.txt` in the attempt folder, keep the exit code and anything else out of that file, and copy its text exactly into `candidate`.
+- **`RUNBOOK.md`:** the outcomes say the same.
+- **Tests:** a miscopied identity is `malformed` and the retry's prompt says why; a disagreeing probe is `inconclusive`.
+
 ## 2026-11-23 — Triage: each ticket's route is decided before its lap (from `factory-pilot-2`)
 
 Seen in `factory-pilot-2`, lap 1.2: the lap stopped halfway for planning. `bmad-build`'s CHECKPOINT 1 waited for a human to approve the plan, so the factory could not build one ticket while the human planned the next. The board's first column read "Backlog — planned" though no ticket in it had a plan. Planning a ticket fully in advance was rejected: its code plan goes stale once the ticket before it merges. The split kept is "settle the intent early, write the code plan at lap time". After warpdotdev-demos/cloud-factory-demo's `triage` skill, with BMAD tickets in place of GitHub issues.
