@@ -112,6 +112,7 @@ gh label create human-granted-round --repo HOST/OWNER/PROJECT
 - In `PROJECT`: `bash harness/run-gates.sh` must exit 0 and print `NOTICE: no backend yet, nothing to judge.`
 - Check that GitHub Actions may run: `gh api --hostname HOST repos/OWNER/PROJECT/actions/permissions`. If it shows `"enabled": false`, stop this bullet: do not switch it on. Ask the person whether Actions is allowed at all. If it is not, the GitHub half of this step is open; go on to step 7 and say in your report that the project runs as in `RUNBOOK.md`, "Without GitHub Actions".
 - On GitHub: pushes to `main` should already have started `gates` runs; confirm at least one succeeded. Then also `gh workflow run gates --repo HOST/OWNER/PROJECT` and `gh workflow run calibrate --repo HOST/OWNER/PROJECT`. Wait for both and confirm the conclusion is `success`. If one fails, show the failing step's log. If a run stays queued for more than ten minutes, no runner picks it up: report it as open.
+- On a new project, both greens prove only that the workflows run, not that the judge catches anything: there is no backend to judge yet, and `harness/mutations/` holds no defects. Read the `calibrate` run's log: if it says `NOTICE: no defects in harness/mutations/ yet. Nothing was calibrated.`, report `calibrate` as "runs; nothing calibrated yet", never as "calibrated". The person calibrates after the first two or three tickets (`RUNBOOK.md`, "Calibrate the judge").
 
 ## Step 7: Branch protection (try, do not force)
 
@@ -120,14 +121,23 @@ Try to protect `main` in `OWNER/PROJECT` through the API (`gh api --hostname HOS
 - If step 6 found that Actions cannot run, leave out the required status checks: until the factory judge runs, they would never report, so no pull request could merge except by an admin bypassing the rule. Report the checks as open, to be required once the person runs the judge.
 - If GitHub refuses (a free plan answers 403 "Upgrade to GitHub Pro or make this repository public" for a private repository), do not work around it. Report it as open.
 
-## Step 8: Report
+## Step 8: Record the setup, then report
 
 First run `python KIT/bin/kit.py --kit KIT doctor` in PROJECT. It must still print `doctor: OK`. Each `open:` line it prints is a setup step still open (Actions off, a missing label, branch protection, no active BMAD initiative); every one goes into item 3 of the report, in its own words. "No active BMAD initiative" is always open after setup: the person sets it before planning (`RUNBOOK.md`, "Plan the product", step 0), because the fence keeps agents out of `_bmad/custom/`.
+
+Then record the setup in the project. `PROJECT_NOTES.md` is the project's own file, not a factory file, and its "Setup status" section is for this. Replace that section's paragraph (keep the heading, leave the rest of the file alone) with:
+
+- one line: the date, `Set up by an agent from factory-kit <commit>`, and the BMAD version;
+- one line per step of `RUNBOOK.md`'s one-time setup, 1 to 6 (install the factory, BMAD, the settings, the labels, branch protection, what is still open): `done` or `open`, and for each open one, what the person does to finish it, in the words you use in item 3 below;
+- the `calibrate` result from step 6 (for a new project: "runs; nothing calibrated yet");
+- each `open:` line `doctor` printed just now, word for word.
+
+Commit ("Record the setup status") and `git push`. If `main` refuses the push because step 7 protected it, push the commit to a branch `setup/status` instead, open a pull request for it with `gh`, and give its link in item 3; do not change the protection.
 
 Give the person a short report:
 
 1. The link to the repository, the local folder path, and the kit folder (KIT), which the project needs next to it for `kit.py sync`.
-2. A table of steps 1–7: done, failed or open, one line each, with evidence (commit ids, workflow run links).
+2. A table of steps 1–7: done, failed or open, one line each, with evidence (commit ids, workflow run links). For step 6, say what the greens prove: on a new project `calibrate` "runs; nothing calibrated yet".
 3. What is left for them, with exact instructions:
    - Branch protection, if step 7 is open.
    - Without Actions: each lap runs the factory judge on its own pull request (lap step A10); require the three checks once the first lap has posted them (`RUNBOOK.md`, "Without GitHub Actions"). The judge needs Java 21 and Node 22 on the machine where laps run.
