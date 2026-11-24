@@ -2,6 +2,19 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-24 — Refining a ticket goes straight to `main`, with no pull request (from `factory-pilot-2`)
+
+Seen in `factory-pilot-2`: `refine 1.3` ended in a planning pull request (#12) that needed a judge run and a merge before triage could see the ticket. The RUNBOOK says a prepared ticket is committed on `main` and pushed, but Sofia's rule in `bmad-agent-po.toml` still sent all planning work through `planning/<step>` pull requests. "Every lap runs in its own worktree" changed the RUNBOOK and left the toml behind, and the RUNBOOK's "Plan the product" section said `main` takes changes only through pull requests.
+
+- **`_bmad/custom/bmad-agent-po.toml`:**
+  - The planning rule now names its steps (the initiative, epics, slicing, adding or dropping a ticket). Those keep their `planning/<step>` pull request.
+  - A new rule covers preparing one ticket that is already sliced: a refine, an answer to a lap's hand-back, or an edit after triage asked a question. Sofia changes only that ticket and its runtime scenario, commits on an up-to-date `main` in the main checkout, never pushes, and tells the user to push. She stops if the session is on another branch.
+- **RUNBOOK:**
+  - "Plan the product" no longer says `main` takes changes only through pull requests. It points to "Prepare the next ticket while a lap runs" for a single ticket.
+  - That section's step 2 says Sofia commits on `main`, changes only that ticket, and opens no pull request.
+- **Tests:** none; text only. The merged PO customization was checked with `resolve_customization.py` on a copy of `factory-pilot-2`'s `_bmad/`; the kit's tests pass.
+- **Not covered:** no refine has run under the new rule yet. The first one is in `factory-pilot-2` after `kit.py sync`.
+
 ## 2026-11-24 — Every lap runs in its own worktree (from `factory-pilot-2`)
 
 Seen in `factory-pilot-2`: lap 1.2 ran in the main checkout, on `story/1.2`. That left the human nowhere to prepare ticket 1.3, because Sofia commits on the branch her session is on. A planning worktree managed by hand was rejected as busywork: the lap should own its worktree.
