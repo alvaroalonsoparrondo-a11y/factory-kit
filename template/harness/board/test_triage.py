@@ -241,5 +241,50 @@ class Triage(unittest.TestCase):
         self.assertIn("triage decisions cannot be read", problems[0])
 
 
+    # ---- prepared: the human approved the "what" ahead
+
+    LEAF = f"{TICKETS}/story-second.md"
+
+    def leaf(self, refined="true"):
+        self.write(self.LEAF, f"---\nid: 2\nrefined: {refined}\n---\n# Second\n\n1. **Given** x **When** y **Then** z\n")
+        self.commit("refine 2")
+
+    def check_lines(self):
+        return self.run_cli("check")[1].splitlines()
+
+    def test_a_refined_leaf_with_a_fresh_ready_decision_is_prepared(self):
+        self.leaf()
+        self.record()
+        self.assertEqual(self.check_lines()[:2], ["fresh ready-to-implement", f"prepared: {self.LEAF}"])
+        ticket, plans = self.load()
+        self.assertEqual(tr.statuses(str(self.root), "main", [ticket], plans)["2"]["prepared"], self.LEAF)
+
+    def test_a_high_risk_ticket_is_prepared_too(self):
+        self.write(f"{TICKETS}/tickets.toml", TOML.format(desc="Adds custom slugs.", risk="high"))
+        self.leaf()
+        self.record()
+        self.assertEqual(self.check_lines()[1], f"prepared: {self.LEAF}")
+
+    def test_not_prepared_keeps_the_check_as_it_was(self):
+        self.record()  # no leaf file
+        self.assertEqual(self.check_lines()[:2], ["fresh ready-to-implement", "plan: the lap approves it"])
+        tr._cache.clear()
+        self.leaf("false")
+        self.record()
+        self.assertEqual(self.check_lines()[1], "plan: the lap approves it")
+
+    def test_a_stale_decision_or_another_route_is_not_prepared(self):
+        self.leaf()
+        self.record({"ref": "2", "state": "ready-to-spec", "summary": "Open.", "questions": ["Which?"]})
+        self.assertNotIn(f"prepared: {self.LEAF}", self.check_lines())
+        tr._cache.clear()
+        self.record()
+        self.write("backend/link/Slugs.java", "class Slugs {}\n")
+        self.commit("story 1 merged")
+        self.assertTrue(self.check_lines()[0].startswith("stale"))
+        ticket, plans = self.load()
+        self.assertIsNone(tr.statuses(str(self.root), "main", [ticket], plans)["2"]["prepared"])
+
+
 if __name__ == "__main__":
     unittest.main()

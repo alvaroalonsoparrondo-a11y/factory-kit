@@ -426,6 +426,11 @@ def derive(snapshot):
                            if r["stops"] else None)
         r["waiting_for_you"] = _open_wait(r, snapshot)
         r["quiet_minutes"] = _quiet_minutes(r, activity)
+        # The worktree the lap runs in, and how long ago a file there last changed (the live board only).
+        r["worktree"] = (snapshot.get("worktrees") or {}).get(r["branch"]) if r["branch"] else None
+        idle = ((activity or {}).get("idle_seconds") or {}).get(r["branch"]) if r["worktree"] else None
+        r["last_change_minutes"] = int(idle // 60) if idle is not None and r["stage"] not in ("Done", "Dropped") \
+            else None
         r["waiting_on"] = [a for a in r["after"] if (r["epic"], a) not in done]
         r["needs_you"] = _needs_you(r, snapshot)
         # A ticket's triage decision, where the snapshot carries decisions (the live board and the dispatcher).

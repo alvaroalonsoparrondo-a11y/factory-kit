@@ -794,5 +794,63 @@ class Triage(unittest.TestCase):
         self.assertEqual(w.runner.started, [])
 
 
+class HandBack(unittest.TestCase):
+    """A prepared ticket's lap gives the ticket back instead of waiting for the human."""
+
+    REASON = "Handed back by the lap: Which slugs are reserved?"
+
+    def started(self):
+        w = World([ticket(1)])
+        w.snapshot["triage"] = {"1.1": decided()}
+        w.tick()
+        return w
+
+    def handed_back(self, w):
+        w.runner.finish(w.run("1.1"), 0, "Handed back 1.1: Which slugs are reserved?")
+        w.snapshot["plans"]["main"] = [plan(1, "draft", blocked=self.REASON)]  # the branch is gone from origin
+
+    def test_a_handed_back_lap_is_forgotten_and_its_worktree_freed(self):
+        w = self.started()
+        self.handed_back(w)
+        rep = w.tick()
+        self.assertEqual(w.store.state["runs"], {})
+        self.assertIn(("worktree remove", "story/1.1"), w.repo.calls)
+        self.assertIn("handed back", w.store.lines[-1])
+        self.assertIn("tickets.py mark 1.1 draft", dict(rep["needs_you"])["1.1"])
+        self.assertEqual(refs(rep["closed"]), ["1.1"])
+
+    def test_the_ticket_is_not_claimed_while_blocked_and_is_after(self):
+        w = self.started()
+        self.handed_back(w)
+        w.tick()
+        rep = w.tick()
+        self.assertEqual(rep["claimed"], [])
+        self.assertEqual(len(w.runner.started), 1)
+        w.gh.taken.discard("story/1.1")  # the lap deleted its branch on origin
+        w.snapshot["plans"]["main"] = [plan(1, "draft")]  # answered, block cleared, triaged again
+        self.assertEqual(refs(w.tick()["claimed"]), ["1.1"])
+
+    def test_a_lap_blocked_for_another_reason_still_halts(self):
+        w = self.started()
+        w.runner.finish(w.run("1.1"), 0, "")
+        w.snapshot["plans"]["main"] = [plan(1, "draft", blocked="FACTORY_RULES 1: migration")]
+        rep = w.tick()
+        self.assertIn("1.1", w.store.state["runs"])
+        self.assertTrue(dict(rep["needs_you"])["1.1"].startswith("blocked: FACTORY_RULES 1"))
+
+    def test_a_hand_back_reason_with_the_branch_still_there_is_not_closed(self):
+        w = self.started()
+        self.handed_back(w)
+        w.on_branch("1.1", sha="b" * 40)
+        w.tick()
+        self.assertIn("1.1", w.store.state["runs"])
+
+    def test_dry_run_closes_nothing(self):
+        w = self.started()
+        self.handed_back(w)
+        rep = w.tick(dry=True)
+        self.assertIn("1.1", w.store.state["runs"])
+        self.assertTrue(rep["closed"][0][1].startswith("would forget"))
+
 if __name__ == "__main__":
     unittest.main()

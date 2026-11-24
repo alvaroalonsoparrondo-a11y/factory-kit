@@ -24,6 +24,11 @@ A stale decision is no decision: the ticket is triaged again.
 
 `plan` in a ready-to-implement decision says who approves the lap's plan: `lap` (the lap approves its
 own plan when it has no open questions) or `human` (the entry has `risk = "high"` or `hitl = true`).
+
+A ticket is *prepared* when its leaf file says `refined: true` (the human approved its "what" ahead) and
+its decision is a fresh ready-to-implement. Then `check` prints `prepared: <leaf path>` in place of the
+`plan:` line: the lap approves its own plan whatever `plan` says, and hands the ticket back instead of
+waiting for the human.
 """
 import argparse
 import datetime as dt
@@ -129,14 +134,46 @@ def ticket_texts(root, rev, ticket):
     epic_dir = posixpath.dirname(tickets_dir)
     epic_file = f"{epic_dir}/{posixpath.basename(epic_dir)}.md"
     out[epic_file] = git(root, "show", f"{rev}:{epic_file}", check=False) or ""
+    for name, text in _leaf_files(root, rev, ticket):
+        out[name] = text
+    return out
+
+
+def _leaf_files(root, rev, ticket):
+    """[(path, text)] of the ticket's leaf files: the `.md` files beside its tickets.toml whose frontmatter
+    `id` is the entry's."""
+    tickets_dir = _tickets_dir(ticket)
     names = (git(root, "ls-tree", "--name-only", rev, tickets_dir + "/", check=False) or "").splitlines()
+    out = []
     for name in names:
         if not name.endswith(".md") or name.endswith("-plan.md"):
             continue
         text = git(root, "show", f"{rev}:{name}", check=False) or ""
         if str(board.parse_frontmatter(text).get("id", "")).strip("'\"") == ticket["id"]:
-            out[name] = text
+            out.append((name, text))
     return out
+
+
+def leaf_file(root, rev, ticket):
+    """(path, frontmatter) of the ticket's leaf file, or None when it has none."""
+    leaves = _leaf_files(root, rev, ticket)
+    if not leaves:
+        return None
+    name, text = leaves[0]
+    return name, board.parse_frontmatter(text)
+
+
+def prepared(root, rev, ticket, record, fresh):
+    """The leaf file's path when the ticket is prepared: the human approved its "what" ahead (leaf file
+    `refined: true`) and its triage is a fresh ready-to-implement. Else None. A prepared ticket's lap
+    approves its own plan and never waits for the human (docs/specs/2026-11-24-early-intent-approval-design.md)."""
+    if not (fresh and record and record.get("state") == "ready-to-implement"):
+        return None
+    leaf = leaf_file(root, rev, ticket)
+    if leaf is None:
+        return None
+    path, fm = leaf
+    return path if str(fm.get("refined", "")).strip("'\"").strip().lower() == "true" else None
 
 
 def fingerprint(root, rev, ticket):
@@ -257,7 +294,8 @@ def statuses(root, rev, tickets, plans):
         out[t["ref"]] = {"state": rec.get("state"), "fresh": fresh, "why": why, "summary": rec.get("summary", ""),
                          "rationale": rec.get("rationale", []), "questions": rec.get("questions", []),
                          "next_step": rec.get("next_step", ""), "plan": rec.get("plan"),
-                         "triaged_at": rec.get("triaged_at", "")}
+                         "triaged_at": rec.get("triaged_at", ""),
+                         "prepared": prepared(root, rev, t, rec, fresh)}
     if sha:
         _cache.clear()
         _cache[key] = out
@@ -307,7 +345,10 @@ def main(argv=None):
             print(f"stale {rec.get('state')}: {why}")
             return 0
         print(f"fresh {rec['state']}")
-        if rec["state"] == "ready-to-implement":
+        leaf = prepared(args.root, args.rev, ticket, rec, fresh)
+        if leaf:
+            print(f"prepared: {leaf}")
+        elif rec["state"] == "ready-to-implement":
             print(f"plan: {'the lap approves it' if rec.get('plan') == 'lap' else 'a human approves it'}")
         print(rec.get("summary", ""))
         for q in rec.get("questions", []):
