@@ -22,8 +22,10 @@ KINDS = ("permission", "choice", "approval", "question", "manual-step", "limit",
 REF = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
-def record(root, ref, state, kind=None, text=None, now=None):
-    """Append one signal to `<root>/.lap/<ref>.jsonl` and return it. Raises ValueError on bad input."""
+def record(root, ref, state, kind=None, text=None, now=None, round_stop=None):
+    """Append one signal to `<root>/.lap/<ref>.jsonl` and return it. Raises ValueError on bad input.
+
+    `round_stop` marks a stop that `lap_round.py take` recorded itself: only a human's `grant` lifts it."""
     if not REF.fullmatch(ref or "") or ".." in ref:
         raise ValueError(f"not a ticket ref: {ref!r}")
     if state == "waiting":
@@ -40,6 +42,8 @@ def record(root, ref, state, kind=None, text=None, now=None):
     line = {"at": at, "state": state}
     if state == "waiting":
         line.update(kind=kind, text=" ".join(text.split()))
+        if round_stop:
+            line["round_stop"] = round_stop
     folder = Path(root) / ".lap"
     folder.mkdir(exist_ok=True)
     with open(folder / f"{ref}.jsonl", "a", encoding="utf-8", newline="\n") as f:

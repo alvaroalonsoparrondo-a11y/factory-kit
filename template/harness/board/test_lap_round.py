@@ -47,7 +47,27 @@ class RoundTests(unittest.TestCase):
         self.assertEqual(self.take("gates", "  loginit FAILS:   401 "), lr.REPEATED)
         self.assertEqual(lr.summary(self.events())["used"], 1)  # the refusal took no round
         self.assertEqual(self.events()[-1]["kind"], "decision")
-        self.assertEqual(self.take("review", "LoginIT fails: 401"), 0)  # another source is another finding
+
+    def test_a_stop_holds_until_a_human_grants(self):
+        # Seen in factory-pilot (issue #16): after exit 4, a take from another source went on.
+        self.assertEqual(self.take("gates", "shortens expected 201 was 400"), 0)
+        self.assertEqual(self.take("gates", "shortens expected 201 was 400"), lr.REPEATED)
+        lr.lap_signal.record(self.root, "1.2", "working")  # the agent saying it works again lifts nothing
+        self.assertEqual(self.take("review", "missing null check"), lr.REPEATED)
+        self.assertEqual(lr.summary(self.events())["used"], 1)
+        last = self.events()[-1]
+        self.assertEqual((last["state"], last["kind"]), ("waiting", "decision"))  # the board shows the stop again
+        lr.grant(self.root, "1.2", 1, "the cause is understood now")
+        self.assertEqual(self.take("review", "missing null check"), 0)
+
+    def test_a_spent_budget_holds_until_a_human_grants(self):
+        for n in range(3):
+            self.take("gates", f"finding {n}")
+        self.assertEqual(self.take("gates", "finding 3"), lr.SPENT)
+        self.assertEqual(self.take("ci", "another"), lr.SPENT)
+        lr.grant(self.root, "1.2", 1, "one more")
+        self.assertEqual(self.take("ci", "another"), 0)
+        self.assertEqual(self.take("ci", "yet another"), lr.SPENT)
 
     def test_a_grant_adds_rounds_and_allows_one_more_try_of_the_same_finding(self):
         self.take("gates", "x")

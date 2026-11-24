@@ -2,6 +2,15 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-24 — The round budget: a stop holds until a human grants (issue #16)
+
+Seen while testing `harness/board/lap_round.py` in `factory-pilot`, in a scratch repository: `take gates` returned exit 4 (the same finding came back), but the very next `take review` was accepted as round 2. The stop was recorded as `waiting decision`, but nothing enforced it, so an agent that moved on to another check could spend the rest of the budget without the human's decision. The board then showed `round` records after the `waiting` signal.
+
+- **`lap_round.py take`:** a stop it records itself (`limit`, exit 3, or the same finding again, exit 4) now holds. Every later `take`, from any source, refuses with the same exit code and records the stop again, until a human's `grant`. `lap_signal.py working` and the dispatcher's `release` lift nothing.
+- **`lap_signal.py`:** a stop from `take` carries `round_stop` (`limit` or `repeated`), so `take` tells it from a lap's own `waiting decision`. Stops recorded before this change carry no marker and do not block.
+- **The lap skill** (both copies): any other exit stops the lap, not only the check. **`RUNBOOK.md`:** the stop holds until you `grant`, and `release` lifts no stop.
+- **Tests:** the sequence from the issue (exit 4, then `take review` is refused until `grant`); a spent budget refuses every source until `grant`. The test that took a round from another source after exit 4 now expects the refusal.
+
 ## 2026-11-24 — The judge: one machine line no longer hides a real test failure (issue #15)
 
 Seen while testing `harness/judge/classify.py` in `factory-pilot`: a log with `Port 8190 was already in use` and a failing test (`LinkApiControllerTest.shortens:42 expected 201 but was 400`) was called `environment`. `classify()` returned on the first machine line anywhere in the log, so a red change took no round and the dispatcher sent it to the human as a machine problem. That dodges the round budget, and a retry can loop without spending rounds.
