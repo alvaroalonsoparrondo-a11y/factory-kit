@@ -57,6 +57,7 @@ NOT_THIS_CHANGE = "Not this change:"
 # A prepared ticket's lap that would wait for the human about the ticket's intent gives it back instead: it
 # marks the ticket blocked on main with this reason and deletes its branch (lap skill, section E).
 HANDED_BACK = "Handed back by the lap"
+USER_CONFIG = "_bmad/custom/config.user.toml"  # the human's BMAD config: the active initiative; never committed
 JUDGE_MARKER = "<!-- factory-judge:gates -->"  # the factory judge's failing-gates comment (harness/judge/judge.py)
 DEFAULT_CAP = 2
 BASE_PORT = 8090  # 8080 is the human's app, 8081 a hand-started worktree lap
@@ -150,6 +151,7 @@ class Repo:
     def add_worktree(self, path, branch):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._git("worktree", "add", "-b", branch, str(path), f"origin/{branch}")
+        self.copy_user_config(path)
 
     def remove_worktree(self, path, branch):
         if Path(path).exists():
@@ -159,6 +161,17 @@ class Repo:
     def add_detached_worktree(self, path, sha):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._git("worktree", "add", "--quiet", "--detach", str(path), sha)
+        self.copy_user_config(path)
+
+    def copy_user_config(self, path):
+        """Copy the human's BMAD config (`_bmad/custom/config.user.toml`, never committed) from the main
+        checkout into a new worktree, so BMAD's scripts there find the active initiative. Without it
+        `tickets.py find` fails in every worktree. Nothing to copy is not an error."""
+        src = self.main_checkout() / USER_CONFIG
+        if src.is_file():
+            dst = Path(path) / USER_CONFIG
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, dst)
 
     def remove_detached_worktree(self, path):
         self._git("worktree", "remove", "--force", str(path), check=False)

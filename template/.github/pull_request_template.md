@@ -10,6 +10,7 @@
 
 - Local gates: <!-- PASSED / FAILED --> — candidate `<!-- id printed by harness/run-gates.sh -->`
 - Runtime verification: <!-- paste `python harness/runtime/verify.py <ticket-id> summary`: verified / skipped (why) -->
+- Triage and plan approval: <!-- the first line of `python harness/board/triage.py <ticket-id> check`, then who approved the plan: the prepared ticket (leaf path), the triage, or a human -->
 - Rounds used: <!-- `python harness/board/lap_round.py <ticket-id> status`, e.g. 1 of 3 (review 1) -->
 
 The evidence that counts is the required checks below this pull request: `gates`, `protected-paths`, `scope-guard`.

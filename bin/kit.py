@@ -112,10 +112,17 @@ class Kit:
         if out(self.path, "status", "--porcelain"):
             raise Stop(f"The kit clone {self.path} has uncommitted changes. Commit or remove them first.")
         if git(self.path, "rev-parse", "--verify", "-q", "origin/main", check=False).returncode == 0:
+            # A project takes what the kit merged. On another branch, `git pull` cannot help: it pulls that branch.
+            branch = out(self.path, "branch", "--show-current", check=False)
+            if branch != "main":
+                where = f"on the branch `{branch}`" if branch else "not on a branch"
+                raise Stop(f"The kit clone {self.path} is {where}, not `main`. "
+                           f"Run `git switch main` and then `git pull --ff-only` in it.")
             git(self.path, "fetch", "-q", "origin", check=False)
             behind = out(self.path, "rev-list", "--count", "HEAD..origin/main")
             if behind != "0":
-                raise Stop(f"The kit clone is {behind} commit(s) behind origin/main. Run `git pull` in {self.path}.")
+                raise Stop(f"The kit clone's `main` is {behind} commit(s) behind origin/main. "
+                           f"Run `git pull --ff-only` in {self.path}.")
 
     @property
     def url(self):
@@ -443,9 +450,11 @@ def doctor(root, kit=None, lock=None, quiet=False, setup=False, github=True):
         if None in skills or skills[0] != skills[1]:
             failures.append(f"{pair[1]} must be a copy of {pair[0]}")
     owners = (read(root, CODEOWNERS) or b"").decode("utf-8", errors="replace").split()
+    owner = next((w for w in owners if w.startswith("@")), "@<owner>")
     for p in paths:
         if "/" + p not in owners:
-            warnings.append(f"{CODEOWNERS} has no line for /{p} (a protected path)")
+            warnings.append(f"{CODEOWNERS} has no line for /{p} (a protected path). It is this project's file; "
+                            f"add the line `/{p} {owner}`")
     if kit is not None and lock is not None and kit.phase == "mature":
         for rel, h in lock["files"].items():
             if not project_owned(rel) and h is not None and digest(read(root, rel)) != h:

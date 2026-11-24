@@ -251,6 +251,7 @@ class FenceTests(Base):
         code, text = self.run_kit("doctor")
         self.assertEqual(code, 0, text)
         self.assertIn("warning: .github/CODEOWNERS has no line for /harness/", text)
+        self.assertIn("add the line `/harness/ @alice`", text)
         (self.proj / ".kiro/skills/lap/SKILL.md").write_text("drifted\n")
         self.assertEqual(self.run_kit("doctor")[0], 1)
 
@@ -427,6 +428,32 @@ class SmallTests(Base):
         code, text = self.run_kit("sync")
         self.assertEqual(code, 2)
         self.assertIn("kit clone", text)
+
+    def test_sync_needs_the_kit_on_an_up_to_date_main(self):  # issue #44
+        self.init()
+        origin = self.tmp / "factory-kit-origin.git"
+        git(self.tmp, "clone", "-q", "--bare", str(self.kit), str(origin))
+        git(self.kit, "remote", "add", "origin", str(origin))
+        git(self.kit, "fetch", "-q", "origin")
+        git(self.kit, "switch", "-q", "-c", "factory/merged-already")
+        code, text = self.run_kit("sync")
+        self.assertEqual(code, 2)
+        self.assertIn("on the branch `factory/merged-already`, not `main`", text)
+        self.assertIn("git switch main", text)
+        git(self.kit, "switch", "-q", "--detach")
+        self.assertIn("not on a branch", self.run_kit("sync")[1])
+        git(self.kit, "switch", "-q", "main")
+        other = self.tmp / "other"
+        git(self.tmp, "clone", "-q", str(origin), str(other))
+        (other / "README.md").write_text("moved\n")
+        commit_all(other, "move main", when=1_000_300)
+        git(other, "push", "-q", "origin", "HEAD:main")
+        code, text = self.run_kit("sync")
+        self.assertEqual(code, 2)
+        self.assertIn("`main` is 1 commit(s) behind origin/main", text)
+        git(self.kit, "pull", "-q", "--ff-only", "origin", "main")
+        code, text = self.run_kit("sync")
+        self.assertEqual(code, 0, text)
 
     def test_sync_without_a_lock_asks_for_adopt(self):
         code, text = self.run_kit("sync")

@@ -18,7 +18,11 @@ counts.
 
 A decision goes stale when, on main since it was made:
 - the ticket's entry, its leaf file or its epic file changed (Sofia refined it, a decision landed);
-- the set of its `after` prerequisites that are done changed (the ticket before it merged);
+- the set of its `after` prerequisites that are done changed (the ticket before it merged), except
+  that a prerequisite getting done never makes a `ready-to-implement` decision stale: triage only
+  says ready-to-implement when an open prerequisite cannot change the ticket's intent, and what its
+  merge changed in the code is still caught by `touches` below. Without that, a ticket prepared while
+  its prerequisite's lap runs would go stale exactly when it becomes ready to start (issue #44);
 - a path in its `touches` changed (any code path when the entry has no `touches`).
 A stale decision is no decision: the ticket is triaged again.
 
@@ -264,8 +268,9 @@ def freshness(root, rev, record, ticket, plans):
         return False, f"{record_path(ticket['ref'])} cannot be read"
     if record.get("fingerprint") != fingerprint(root, rev, ticket):
         return False, "the ticket, its leaf file or its epic file changed since"
-    if record.get("prereqs_done", []) != done_prereqs(ticket, plans):
-        return False, "a prerequisite was done since"
+    was, now = set(record.get("prereqs_done", [])), set(done_prereqs(ticket, plans))
+    if was != now and not (record.get("state") == "ready-to-implement" and was <= now):
+        return False, "a prerequisite was done since" if was <= now else "a prerequisite is no longer done"
     base = record.get("main_sha", "")
     if not base or git(root, "cat-file", "-e", f"{base}^{{commit}}", check=False) is None:
         return False, "the commit it was made on is unknown here"
