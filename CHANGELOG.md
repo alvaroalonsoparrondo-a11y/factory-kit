@@ -2,6 +2,13 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-25 — Say where a lap's worktree is (issue #47)
+
+Seen in a pilot lap: the human expected the lap's worktree inside the repo folder, did not find it there and thought the lap had not used one. It was at `../<project>-wt/story-<ticket-id>` and in `git worktree list`, but nothing they read pointed there.
+
+- **`lap` skill (both copies), step A4:** after making the worktree, the lap tells the user its absolute path in one line.
+- **RUNBOOK:** "Every lap runs in its own worktree" says the worktree sits next to the project folder, not inside it, with an example path, and that `git worktree list` shows every lap's folder.
+
 ## 2026-11-25 — RUNBOOK: branch protection on a free private repository, and a stale "as now" (issues #21, #22)
 
 Seen while setting up `factory-pilot-2` (kit `b9de8ba`), reading `template/RUNBOOK.md`.

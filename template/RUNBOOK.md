@@ -105,7 +105,7 @@ To make it the default here, set `chat.defaultAgent` to `factory` in Kiro's sett
 
 ### Every lap runs in its own worktree
 
-You start a lap from a session in this folder, but the lap never works in it: it makes its own worktree, `../<project>-wt/story-<ticket id>`, branches `story/<ticket id>` there from `origin/main`, and does all its work there, gates on port 8081 (8080 stays free for you). This folder stays on `main`, so you prepare the next tickets here while laps run. The live dashboard shows each running lap's worktree on its card, with when a file there last changed. Then:
+You start a lap from a session in this folder, but the lap never works in it: it makes its own worktree, `../<project>-wt/story-<ticket id>`, branches `story/<ticket id>` there from `origin/main`, and does all its work there, gates on port 8081 (8080 stays free for you). The worktree is a sibling of this folder, not inside it: for a project in `C:\code\shop`, lap 1.3 works in `C:\code\shop-wt\story-1.3`. The lap says the path when it makes the worktree, and `git worktree list` shows every lap's folder. This folder stays on `main`, so you prepare the next tickets here while laps run. The live dashboard shows each running lap's worktree on its card, with when a file there last changed. Then:
 
 - If you push to `main` while it runs, it merges `origin/main` into its branch before it pushes. Tell it `main moved` if its pull request falls behind later.
 - After you merge, tell that session `merged`. It marks the ticket done straight onto `main`, then removes its worktree and the local branch.
