@@ -90,18 +90,19 @@ Say what would have to change before it is worth triaging again. Do not choose `
 
 ## 5. Write the answer
 
-Your final message is one raw JSON object, with no prose before or after it and no code fence:
+The answer is one raw JSON object, with no prose before it and no code fence:
 
 {"ref": "<ticket ref>", "state": "ready-to-implement | ready-to-spec | needs-info | wait", "summary": "<one sentence: the decision and the main reason>", "rationale": ["<evidence, with file paths or ticket ids>", "..."], "questions": ["<for ready-to-spec and needs-info: each decision or question>"], "next_step": "<one concrete next step for the human or the lap>"}
 
 - `questions` is empty for `ready-to-implement`, and must not be empty for `ready-to-spec` and `needs-info`.
 - Keep `rationale` to the evidence that decided it: at most six short lines.
 - No secrets, tokens, environment values or command output dumps.
+- Headless (`FACTORY_DISPATCHED=1`), or when a lap runs this triage, the JSON object is your whole final message: nothing after it either. By hand, it is followed by exactly one line, the offer in step 6.
 
 ## 6. Recording the decision
 
 Headless (`FACTORY_DISPATCHED=1`): stop after step 5. The dispatcher records the decision.
 
-By hand: after the answer, offer to record it. On the human's yes in chat, save the JSON object to `.lap/<ref>-triage.json` and run `python harness/board/triage.py <ref> record .lap/<ref>-triage.json --push`. It fetches, checks the decision, stamps it with `origin/main` and a fingerprint of the ticket, and commits `docs/triage/<ref>.json` straight onto `main` from a throwaway worktree, as the dispatcher does; this checkout does not change. Show its output. Run it only after that yes, and never write, commit or push a decision any other way. If it is refused, show why and stop.
+By hand: on the line after the JSON object, offer to record it, in one sentence (for example `Record this decision on main? (yes/no)`). On the human's yes in chat, save the JSON object to `.lap/<ref>-triage.json` and run `python harness/board/triage.py <ref> record .lap/<ref>-triage.json --push`. It fetches, checks the decision, stamps it with `origin/main` and a fingerprint of the ticket, and commits `docs/triage/<ref>.json` straight onto `main` from a throwaway worktree, as the dispatcher does; this checkout does not change. Show its output. Run it only after that yes, and never write, commit or push a decision any other way. If it is refused, show why and stop.
 
-A recorded decision goes stale when the ticket, its epic file or its prerequisites change, or when `main` changes a path in its `touches`; `triage.py <ref> check` says so, and the ticket is triaged again.
+A recorded decision goes stale when the ticket, its epic file or its prerequisites change, or when `main` changes a path in its `touches`; `triage.py <ref> check` says so, and the ticket is triaged again. A prerequisite getting done does not make a `ready-to-implement` decision stale (you only chose it because the open prerequisites cannot change the intent); what its merge changed in the code still does, through `touches`.

@@ -10,6 +10,34 @@ Seen while setting up `factory-pilot-2` (kit `b9de8ba`), reading `template/RUNBO
 - **"The dispatcher", Headless:** "(`.claude/settings.json` denies nothing, as now)" was written before `kit.py init` turned the fence on; in a project made with `init` the fence is on. "as now" is gone.
 - **For each existing project:** `kit.py sync` updates an unchanged `RUNBOOK.md`.
 
+## 2026-11-24 — Friction from a pilot lap: stale prepared tickets, worktree config, sync message, scenario refine (issue #44)
+
+Seen in a pilot project running a kit sync, preparing ticket 1.4, triage and a full lap.
+
+- **A prepared ticket went stale exactly when it became ready.** `triage.py` made any decision stale once one of its `after` prerequisites was done, and the RUNBOOK tells the human to prepare a ticket while its prerequisite's lap runs. So the prerequisite's merge took away "prepared", and a human had to approve the plan.
+  - `triage.py`: a prerequisite getting done no longer makes a `ready-to-implement` decision stale. The triage skill only chooses that route when the open prerequisites cannot change the intent, and what the merge changed in the code is still caught by `touches` (any code path when there are none). A `wait` or other decision still goes stale, and so does any decision whose prerequisite is no longer done ("a prerequisite is no longer done").
+  - Lap skill, step 3 (both copies): a hand-started lap on a `refined: true` ticket whose decision is stale or missing triages it again itself (the triage skill only reads). If the answer is `ready-to-implement`, the lap asks in one line and, on a yes, records it with `record --push` and goes on as prepared. A dispatched lap is unchanged: the dispatcher triages a stale ticket before it claims it.
+  - The triage skill and RUNBOOK say the same.
+- **`tickets.py` failed in every lap worktree** with `no active initiative`: `_bmad/custom/config.user.toml` is not committed, so `git worktree add` never copies it.
+  - Lap skill, step 4: copy it from the main checkout into the lap's worktree, unchanged, when it exists.
+  - Dispatcher: `Repo.add_worktree` and `add_detached_worktree` (lap and triage worktrees) copy it too.
+  - The fix is a copy, not a fallback in `tickets.py`, because that script is BMAD's own.
+- **`kit.py sync` said "Run `git pull`" when the kit clone was on a merged feature branch.** `git pull` there only pulls that branch. `Kit.check_clean` now stops first if the clone is not on `main` (or on no branch): "Run `git switch main` and then `git pull --ff-only`". The behind message names `main`.
+- **A refine did not keep the runtime scenario in step.** `bmad-agent-po.toml`'s refine rule now says to rewrite `docs/runtime/<ref>.json` in the same commit when the criteria are written or renumbered: one assertion per numbered criterion, with its id, and none for an id that is not a criterion. A criterion that cannot be checked on a fresh app is left out and noted in the leaf file.
+- **CODEOWNERS warning.** The seed already has the triage lines. The pilot's own `CODEOWNERS` predates them, and it is the project's file. `doctor`'s warning now gives the exact line to add, with the owner taken from the file. **Existing projects:** add `/.claude/skills/triage/` and `/.kiro/skills/triage/` by hand.
+- **Plan size gate.** `bmad-build.toml`: the copied `## Acceptance (from …)` block is left out of the plan's size count. A prepared ticket's plan that is still too big hands the ticket back ("split the ticket?") instead of asking.
+- **Pull request template:** a "Triage and plan approval" line, which the lap skill already asked for.
+- **Triage skill:** by hand, the JSON answer is followed by exactly one line offering to record it. Headless, or run by a lap, the JSON stays the whole message. The dispatcher's parser already takes the last JSON object.
+- **Tests:**
+  - 4 triage tests: a wait still goes stale; a ready decision stays fresh; a merge in `touches` still makes it stale; a prerequisite that is no longer done makes it stale.
+  - 2 dispatcher tests, on a real repository: the config is copied, and a missing config is fine.
+  - 1 `kit.py` sync test: feature branch, detached HEAD, behind, then OK.
+  - The CODEOWNERS warning test checks the suggested line.
+- **Not covered:**
+  - The two `_bmad/custom/*.toml` changes were checked with `tomllib` only, not with `resolve_customization.py`, since there is no BMAD install here.
+  - No lap has run the new step 3 or step 4 yet.
+  - The size-gate rule depends on `bmad-build` following a customization fact.
+
 ## 2026-11-24 — The GitHub board is gone; the live board is the only board (issue #40)
 
 There were two boards. The `board` workflow built `BOARD.md` and `board.json` on an orphan `board` branch; `serve.py` reads the same inputs on your machine and also sees unpushed laps, stops and quiet laps. The GitHub board showed less, had already disagreed with the live board (CI's "Start the lap" against the live "Triage it"), and cost a workflow run and a commit on almost every repository event.

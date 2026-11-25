@@ -852,5 +852,38 @@ class HandBack(unittest.TestCase):
         self.assertIn("1.1", w.store.state["runs"])
         self.assertTrue(rep["closed"][0][1].startswith("would forget"))
 
+
+class RealWorktrees(unittest.TestCase):
+    """The Git side of a worktree the dispatcher makes, on a real repository (issue #44)."""
+
+    def git(self, cwd, *args):
+        done = d.subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        return done.stdout
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.main = self.tmp / "proj"
+        self.main.mkdir()
+        self.git(self.main, "init", "-q", "-b", "main")
+        self.git(self.main, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x")
+        self.repo = d.Repo(self.main)
+
+    def tearDown(self):
+        d.shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_worktree_gets_the_humans_bmad_config(self):
+        cfg = self.main / d.USER_CONFIG
+        cfg.parent.mkdir(parents=True)
+        cfg.write_text('[core]\nactive_initiative = "initiative-shop"\n', encoding="utf-8")
+        self.repo.add_detached_worktree(self.tmp / "wt" / "triage-1.1", "HEAD")
+        self.assertEqual((self.tmp / "wt" / "triage-1.1" / d.USER_CONFIG).read_text(encoding="utf-8"),
+                         cfg.read_text(encoding="utf-8"))
+
+    def test_no_config_is_not_an_error(self):
+        self.repo.add_detached_worktree(self.tmp / "wt" / "triage-1.1", "HEAD")
+        self.assertFalse((self.tmp / "wt" / "triage-1.1" / d.USER_CONFIG).exists())
+
+
 if __name__ == "__main__":
     unittest.main()

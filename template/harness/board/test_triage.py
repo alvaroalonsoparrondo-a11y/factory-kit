@@ -29,6 +29,7 @@ after = [1]
 risk = "{risk}"
 touches = ["backend/link/**", "e2e/tests/1-2-*.spec.ts"]
 """
+WAIT = {"state": "wait", "summary": "After 1.", "rationale": ["1 is not done"], "questions": [], "next_step": "Wait for 1."}
 READY = {"ref": "2", "state": "ready-to-implement", "summary": "Clear and bounded.", "rationale": ["link/ has it"],
          "questions": [], "next_step": "Run the lap."}
 
@@ -140,11 +141,35 @@ class Triage(unittest.TestCase):
         self.commit("pull 2")
         self.assertFalse(self.fresh()[0])
 
-    def test_a_prerequisite_done_makes_it_stale(self):
-        self.record()
+    def test_a_prerequisite_done_makes_a_wait_stale(self):
+        self.record(WAIT)
         self.write(f"{TICKETS}/story-first-plan.md", "---\nticket: 1\nstatus: done\n---\n")
         self.commit("mark 1 done")
         self.assertEqual(self.fresh(), (False, "a prerequisite was done since"))
+
+    def test_a_prerequisite_done_keeps_a_ready_decision_fresh(self):  # issue #44: prepared while 1 was in review
+        self.record()
+        self.write(f"{TICKETS}/story-first-plan.md", "---\nticket: 1\nstatus: done\n---\n")
+        self.write("frontend/app.ts", "merged 1\n")  # outside touches
+        self.commit("story 1 merged and marked done")
+        self.assertEqual(self.fresh(), (True, ""))
+
+    def test_a_prerequisite_merge_in_touches_still_makes_it_stale(self):
+        self.record()
+        self.write(f"{TICKETS}/story-first-plan.md", "---\nticket: 1\nstatus: done\n---\n")
+        self.write("backend/link/Slugs.java", "class Slugs {}\n")
+        self.commit("story 1 merged and marked done")
+        fresh, why = self.fresh()
+        self.assertFalse(fresh)
+        self.assertIn("backend/link/Slugs.java", why)
+
+    def test_a_prerequisite_no_longer_done_makes_it_stale(self):
+        self.write(f"{TICKETS}/story-first-plan.md", "---\nticket: 1\nstatus: done\n---\n")
+        self.commit("mark 1 done")
+        self.record()
+        self.write(f"{TICKETS}/story-first-plan.md", "---\nticket: 1\nstatus: in-progress\n---\n")
+        self.commit("reopen 1")
+        self.assertEqual(self.fresh(), (False, "a prerequisite is no longer done"))
 
     def test_without_touches_any_code_change_makes_it_stale(self):
         self.write(f"{TICKETS}/tickets.toml", TOML.format(desc="x", risk="").replace(
