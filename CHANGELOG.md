@@ -2,6 +2,14 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-25 — RUNBOOK: branch protection on a free private repository, and a stale "as now" (issues #21, #22)
+
+Seen while setting up `factory-pilot-2` (kit `b9de8ba`), reading `template/RUNBOOK.md`.
+
+- **One-time setup, step 5:** on a free plan, GitHub refuses to protect a private repository (403 "Upgrade to GitHub Pro or make this repository public"); the RUNBOOK said protection is set but not enforced. It now says it cannot be set, to leave the step open, and that the checks still have to be respected by hand. `AGENT_SETUP.md` step 7 already handled this. Step 5 also said a check can only be selected after it has run once; that is true of Settings only, so it now gives the API call, which takes the checks before any run.
+- **"The dispatcher", Headless:** "(`.claude/settings.json` denies nothing, as now)" was written before `kit.py init` turned the fence on; in a project made with `init` the fence is on. "as now" is gone.
+- **For each existing project:** `kit.py sync` updates an unchanged `RUNBOOK.md`.
+
 ## 2026-11-24 — Friction from a pilot lap: stale prepared tickets, worktree config, sync message, scenario refine (issue #44)
 
 Seen in a pilot project running a kit sync, preparing ticket 1.4, triage and a full lap.
