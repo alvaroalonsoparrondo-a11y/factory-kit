@@ -2,6 +2,14 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-25 — BMAD setup: RUNBOOK and AGENT_SETUP describe the same setup, and how to answer its questions (issue #20)
+
+Seen while setting up `factory-pilot-2` with `AGENT_SETUP.md` (kit `b9de8ba`), step 4.
+
+- **`AGENT_SETUP.md`, step 4:** when setup had a pending question it said to ask the person, but not how to pass the answer; the agent had to read `setup.py` to find out. It now gives `--list-config-questions` to list the questions, the answer file format (`[modules.<module>]` tables of strings) and `--module-answers <file>` to pass it, and says this is the same setup as `bmad setup`.
+- **`template/RUNBOOK.md`, one-time step 2:** says that `bmad setup` runs BMAD's `setup.py`, the script `AGENT_SETUP.md` step 4 runs directly, so the two documents no longer read as two different setups.
+- **For each existing project:** `kit.py sync` updates an unchanged `RUNBOOK.md`.
+
 ## 2026-11-25 — RUNBOOK: branch protection on a free private repository, and a stale "as now" (issues #21, #22)
 
 Seen while setting up `factory-pilot-2` (kit `b9de8ba`), reading `template/RUNBOOK.md`.

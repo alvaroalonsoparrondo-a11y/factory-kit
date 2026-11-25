@@ -85,7 +85,16 @@ uv run --no-cache SKILLS/bmad/scripts/setup.py --project-root . --skill SKILLS/b
 
 Keep `--copy`: without it the skill folders are symlinks into `.agents/skills/`, which the project's `.gitignore` leaves out, so a clone would get broken links. With it, no `.agents/` folder is made.
 
-The setup command prints JSON. It must show `"current": true` and an empty `"problems"` list (`"status"` may be `created` or `repaired`; both are fine). If it lists pending questions, ask the person; do not invent answers. Note the `version` it reports for your report.
+The setup command prints JSON. It must show `"current": true` and an empty `"problems"` list (`"status"` may be `created` or `repaired`; both are fine). Note the `version` it reports for your report. This is the same setup as saying `bmad setup` in an agent session (`RUNBOOK.md`, one-time step 2), which runs this script.
+
+If it lists pending questions, ask the person; do not invent answers. To see them, add `--list-config-questions` to the setup command: it prints each one as JSON with its `module`, `key`, `prompt` and `default`. Write the person's answers to a TOML file outside the project, one table per module, every value a string:
+
+```toml
+[modules.founder]
+record_folder = "docs/founder"
+```
+
+Then run the setup command again with `--module-answers <file>` added, and check its output as above.
 
 **Check** that the factory's BMAD rules are picked up:
 
