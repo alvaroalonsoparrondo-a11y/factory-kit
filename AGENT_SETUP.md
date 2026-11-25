@@ -37,6 +37,7 @@ Name repositories to `gh` as `HOST/OWNER/<repo>` (for example `gh repo view HOST
 ## Step 1: Preflight
 
 - Run `git --version`, `gh auth status --hostname HOST`, `node --version`, `uv --version`. Stop if one is missing, `gh` is not signed in to HOST, or it lacks the `repo` or `workflow` scope.
+- Run `java -version` and read the major version of `node --version`. The factory judge and the gates need Java 21 and Node 22 (`RUNBOOK.md`, "Without GitHub Actions"). If Java is missing or not 21, or Node is not 22, do not stop: carry on and put a warning in your report naming what was found, since laps on this machine need them but CI brings its own.
 - Get the kit: if KIT does not exist, `git clone https://HOST/OWNER/factory-kit.git KIT`. Then check:
   - `KIT/bin/kit.py` and `KIT/template/` exist;
   - `git -C KIT status --porcelain` is empty, and `main` is checked out and up to date with its `origin` (`git -C KIT pull --ff-only`);

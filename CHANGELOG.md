@@ -2,6 +2,13 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-25 — AGENT_SETUP preflight: check Java 21 and Node 22 (issue #24)
+
+Seen while setting up `factory-pilot-2` with `AGENT_SETUP.md` (kit `b9de8ba`), step 1.
+
+- **Step 1, Preflight:** it checked that `node` exists but not its version, and did not check Java at all, although the judge needs Java 21 and Node 22 (`RUNBOOK.md`, "Without GitHub Actions"; step 8 says so too). The machine had Node v24.15.0 and nothing flagged it. Preflight now runs `java -version`, reads Node's major version, and reports a mismatch as a warning, without stopping, since CI brings its own.
+- **For each existing project:** nothing to do; `AGENT_SETUP.md` is only read when a project is set up.
+
 ## 2026-11-25 — RUNBOOK: branch protection on a free private repository, and a stale "as now" (issues #21, #22)
 
 Seen while setting up `factory-pilot-2` (kit `b9de8ba`), reading `template/RUNBOOK.md`.
