@@ -4,6 +4,8 @@ This repository is built one ticket at a time by an agent, planned with BMAD v7,
 
 These instructions are for any coding agent. Claude Code reads them through `CLAUDE.md`. Kiro CLI reads them directly and must run as the `factory` agent (`kiro-cli chat --agent factory`), because that agent carries the fence.
 
+**Copilot CLI supports supervised planning and triage only.** It reads these instructions and shares `.claude/skills/`; Claude Code need not be installed. Start with `copilot`, use `/permissions manual`, and have the human review each edit and command. The Claude/Kiro deny rules are not a Copilot fence. Never start or resume a lap, invoke `bmad-build` or `bmad-build-auto`, or implement application code with Copilot; ask the human to use Claude Code or the Kiro `factory` agent. `.github/copilot/settings.json` disables those skills as a workflow safeguard, not filesystem protection. Never enable them or broaden permissions to get past this limitation.
+
 Before any work, read in full:
 
 - `MISSION.md` — what the product is, what is out of scope, the hard invariants.

@@ -10,7 +10,7 @@ They may also give these; otherwise use the default:
 
 - **HOST** — the GitHub host. Default `github.com`; a GitHub Enterprise host such as `github.example.com` otherwise. If the person gives a repository URL, its host is HOST.
 - **KIT** — a local clone of the kit. Default: clone `HOST/OWNER/factory-kit` into `DIRECTORY/factory-kit` (or use that folder if it is already a clone of it). The person may name another folder.
-- **AGENTS** — which agents the project is set up for: `claude-code`, `kiro-cli`, or both. Default both.
+- **AGENTS** — which agents the project is set up for: any combination of `claude-code`, `kiro-cli`, `copilot-cli`. Default `claude-code` and `kiro-cli`. Copilot supports supervised planning and triage only; a lap still needs Claude Code or Kiro.
 
 If the person gives a repository URL whose name differs from PROJECT, or a value that contradicts another, stop and ask which one holds.
 
@@ -37,6 +37,7 @@ Name repositories to `gh` as `HOST/OWNER/<repo>` (for example `gh repo view HOST
 ## Step 1: Preflight
 
 - Run `git --version`, `gh auth status --hostname HOST`, `node --version`, `uv --version`. Stop if one is missing, `gh` is not signed in to HOST, or it lacks the `repo` or `workflow` scope.
+- If AGENTS includes `copilot-cli`, check `copilot --version` (the integration was checked with 1.0.115). If missing, report that the human must install Copilot CLI. Copilot sign-in is separate from `gh`: ask the human to run `copilot login` if needed; never perform sign-in or handle its credentials for them.
 - Get the kit: if KIT does not exist, `git clone https://HOST/OWNER/factory-kit.git KIT`. Then check:
   - `KIT/bin/kit.py` and `KIT/template/` exist;
   - `git -C KIT status --porcelain` is empty, and `main` is checked out and up to date with its `origin` (`git -C KIT pull --ff-only`);
@@ -68,12 +69,13 @@ python KIT/bin/kit.py --kit KIT init --owner OWNER --host HOST
 - No file in PROJECT contains a placeholder: two underscores, then `OWNER`, `PROJECT` or `HOST`, then two underscores.
 - `kit.lock.json` exists and its `revision` is the kit commit you noted in step 1.
 - The JSON files `.claude/settings.json` and `.kiro/agents/factory.json` parse. The first has a non-empty deny list, the second a `deny` rule for `fs_write`: they are the fence that keeps Claude Code and Kiro out of the factory files. Check both whatever AGENTS is: they are factory files and stay in the project.
+- `.github/copilot/settings.json` disables `lap`, `bmad-build` and `bmad-build-auto`. It stays in every project too. This limits Copilot's skill discovery, not its filesystem access; never report it as a Copilot fence or `doctor: OK` as proof that Copilot laps are supported.
 
 Commit ("Install the factory from the kit at <commit>") and push: `git push -u origin main`.
 
 ## Step 4: Install and set up BMAD v7 (in PROJECT only)
 
-Install for the agents in AGENTS only: one `-a` per agent (`-a claude-code`, `-a kiro-cli`).
+Install into the required skill directories: use `-a claude-code` when AGENTS includes Claude Code **or Copilot**, and `-a kiro-cli` when it includes Kiro. Deduplicate these flags. Copilot discovers `.claude/skills/` directly; this destination does not require the Claude Code executable. For Copilot-only setup, use only `-a claude-code`, not an installer-specific Copilot destination.
 
 ```bash
 npx -y skills add bmad-code-org/BMAD-METHOD/skills/core-tools --skill '*' -a claude-code -a kiro-cli -y --copy
@@ -81,9 +83,9 @@ npx -y skills add bmad-code-org/BMAD-METHOD/skills/method --skill '*' -a claude-
 uv run --no-cache SKILLS/bmad/scripts/setup.py --project-root . --skill SKILLS/bmad --root SKILLS
 ```
 
-`SKILLS` is `.claude/skills` when AGENTS includes `claude-code`, else `.kiro/skills`.
+`SKILLS` is `.claude/skills` when AGENTS includes `claude-code` or `copilot-cli`, else `.kiro/skills`.
 
-Keep `--copy`: without it the skill folders are symlinks into `.agents/skills/`, which the project's `.gitignore` leaves out, so a clone would get broken links. With it, no `.agents/` folder is made.
+Keep `--copy`: the installed skill folders must be real files, not symlinks into ignored `.agents/skills/`. The installer may also create an ignored `.agents/` directory; do not rely on or commit it.
 
 The setup command prints JSON. It must show `"current": true` and an empty `"problems"` list (`"status"` may be `created` or `repaired`; both are fine). If it lists pending questions, ask the person; do not invent answers. Note the `version` it reports for your report.
 
@@ -93,7 +95,9 @@ The setup command prints JSON. It must show `"current": true` and an empty `"pro
 uv run --no-cache _bmad/scripts/resolve_customization.py --skill SKILLS/bmad-build --project-root . --key workflow
 ```
 
-The output must contain the review lens id `factory-judge`, `"review": "thorough"`, and `MISSION.md` among `persistent_facts`. Also check that no folder under SKILLS is a symlink, and that `.claude/skills/lap/SKILL.md` and `.kiro/skills/lap/SKILL.md` still exist and are unchanged (`git status` shows them clean). With both agents, `.kiro/skills/` holds the same BMAD skills as `.claude/skills/`; with one, the other agent's folder holds only `lap`.
+The output must contain the review lens id `factory-judge`, `"review": "thorough"`, and `MISSION.md` among `persistent_facts`. Also check that no folder under SKILLS is a symlink, and that `.claude/skills/lap/SKILL.md` and `.kiro/skills/lap/SKILL.md` still exist and are unchanged (`git status` shows them clean). When both destinations were selected, both hold the same BMAD skills; an unselected destination keeps only the kit's own skills.
+
+With Copilot selected, run `copilot instruction list --json` and `copilot skill list --json` from PROJECT. Confirm the root `AGENTS.md` and the installed BMAD planning and `triage` skills are discovered. Discovery outside a trusted session may still list build skills as enabled: it does not prove that repository settings are active. Have the human trust the project in an interactive Copilot session and check `/skills`: `lap`, `bmad-build` and `bmad-build-auto` must be disabled there. If that interactive check is not done during setup, report it as an open Copilot setup step. If a trusted session enables a build skill, stop and report it; never change the settings to make it work.
 
 Commit ("Install BMAD v7") and push. Include the skill folders you installed into, `_bmad/` and `skills-lock.json`; stage them by name, not with `git add -A`.
 
@@ -141,7 +145,7 @@ Give the person a short report:
 3. What is left for them, with exact instructions:
    - Branch protection, if step 7 is open.
    - Without Actions: each lap runs the factory judge on its own pull request (lap step A10); require the three checks once the first lap has posted them (`RUNBOOK.md`, "Without GitHub Actions"). The judge needs Java 21 and Node 22 on the machine where laps run.
-   - Set the active BMAD initiative, plan the product with BMAD (each planning step is its own `planning/<step>` pull request), fill in `MISSION.md` themselves, then say "run a lap". See `RUNBOOK.md`, "Plan the product".
+   - Set the active BMAD initiative, plan the product with BMAD (each planning step is its own `planning/<step>` pull request), and fill in `MISSION.md` themselves. Run laps with Claude Code or Kiro, never Copilot. If AGENTS is Copilot-only, explicitly report "planning and triage only; install Claude Code or Kiro before running laps". See `RUNBOOK.md`, "Plan the product" and "Copilot CLI: supervised planning and triage".
 4. Anything that surprised you, or that this file or the kit's other documents got wrong, so the kit can be fixed.
 
-Then tell the person to close this session. Laps run in a fresh session opened inside the project folder, so its `AGENTS.md` and rules apply (in Kiro: `kiro-cli chat --agent factory`).
+Then tell the person to close this session. Start a fresh session inside the project for planning or triage. For a lap, use Claude Code or `kiro-cli chat --agent factory`, so the project's `AGENTS.md` and the agent's fence apply. Copilot's manual permissions require human supervision; do not recommend allow-all, assisted approvals or persistent blanket tool approvals.

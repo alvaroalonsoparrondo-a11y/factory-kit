@@ -256,6 +256,69 @@ class FenceTests(Base):
         self.assertEqual(self.run_kit("doctor")[0], 1)
 
 
+class CopilotTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.init()
+
+    def test_doctor_reports_missing_or_unreadable_copilot_settings(self):
+        path = self.proj / kit.COPILOT_SETTINGS
+        path.unlink()
+        code, text = self.run_kit("doctor", "--offline")
+        self.assertEqual(code, 1, text)
+        self.assertIn(f"{kit.COPILOT_SETTINGS} is missing", text)
+        for data in (b"{", b"\xff"):
+            with self.subTest(data=data):
+                path.write_bytes(data)
+                code, text = self.run_kit("doctor", "--offline")
+                self.assertEqual(code, 1, text)
+                self.assertIn(f"{kit.COPILOT_SETTINGS} cannot be read", text)
+
+    def test_doctor_rejects_enabled_build_skills_but_accepts_case_and_extra_names(self):
+        path = self.proj / kit.COPILOT_SETTINGS
+        settings = json.loads(path.read_text())
+        required = settings["disabledSkills"]
+        for name in required:
+            with self.subTest(name=name):
+                settings["disabledSkills"] = [s for s in required if s != name]
+                path.write_text(json.dumps(settings))
+                code, text = self.run_kit("doctor", "--offline")
+                self.assertEqual(code, 1, text)
+                self.assertIn(f"must disable {name}", text)
+        settings["disabledSkills"] = [s.upper() for s in required] + ["project-skill"]
+        path.write_text(json.dumps(settings))
+        code, text = self.run_kit("doctor", "--offline")
+        self.assertEqual(code, 0, text)
+
+    def test_doctor_reports_invalid_copilot_settings_shapes(self):
+        for settings in ([], None, {}, {"disabledSkills": "lap"}, {"disabledSkills": [None]}):
+            with self.subTest(settings=settings):
+                (self.proj / kit.COPILOT_SETTINGS).write_text(json.dumps(settings))
+                code, text = self.run_kit("doctor", "--offline")
+                self.assertEqual(code, 1, text)
+                self.assertIn("disabledSkills must be a list of skill names", text)
+
+    def test_sync_adds_settings_to_an_existing_project_and_keeps_local_settings(self):
+        policy = self.text(kit.COPILOT_SETTINGS)
+        (self.kit / "template" / kit.COPILOT_SETTINGS).unlink()
+        old_revision = commit_all(self.kit, "before Copilot", when=1_000_300)
+        (self.proj / kit.COPILOT_SETTINGS).unlink()
+        lock = json.loads(self.text(kit.LOCK))
+        lock["revision"] = old_revision
+        del lock["files"][kit.COPILOT_SETTINGS]
+        (self.proj / kit.LOCK).write_text(json.dumps(lock))
+        local = self.proj / ".github/copilot/settings.local.json"
+        local.write_text('{"companyAnnouncements": ["Project notice"]}\n')
+        commit_all(self.proj, "existing project", when=1_000_400)
+        self.kit_change(kit.COPILOT_SETTINGS, policy, when=1_000_500)
+        code, text = self.run_kit("sync")
+        self.assertEqual(code, 0, text)
+        self.assertEqual(normal_text(self.text(kit.COPILOT_SETTINGS)), normal_text(policy))
+        self.assertEqual(local.read_text(), '{"companyAnnouncements": ["Project notice"]}\n')
+        self.merge_sync(when=1_000_600)
+        self.assertIn("nothing to do", self.run_kit("sync")[1])
+
+
 class SetupTests(Base):
     """`doctor` lists what the one-time setup still lacks, and never fails on it (factory-pilot-2, item 1)."""
 
@@ -508,6 +571,7 @@ class AdoptTests(unittest.TestCase):
         git(self.kit, "mv", "fence/kiro-factory.json", "template/.kiro/agents/factory.json")
         shutil.copytree(REAL / "seed", self.kit / "seed")
         shutil.copytree(REAL / "bin", self.kit / "bin", ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copytree(REAL / "template/.github/copilot", self.kit / "template/.github/copilot")
         shutil.copy(REAL / "template/.gitignore", self.kit / "template/.gitignore")
         (self.kit / "template/RUNBOOK.md").write_text("the kit's new runbook\n")
         commit_all(self.kit, "migration", when=1_000_200)
@@ -523,10 +587,11 @@ class AdoptTests(unittest.TestCase):
         self.assertEqual(code, 0, text)
         self.assertEqual((self.proj / "RUNBOOK.md").read_text(), "the kit's new runbook\n")
         self.assertIn("both changed RUNBOOK.md: the kit's change reached main later", text)
-        changed = git(self.proj, "status", "--porcelain")
+        changed = git(self.proj, "status", "--porcelain", "--untracked-files=all")
         self.assertIn("RUNBOOK.md", changed)
         self.assertIn("kit.lock.json", changed)
         self.assertIn(".gitignore", changed)
+        self.assertIn(".github/copilot/settings.json", changed)
         self.assertNotIn("harness/", changed)
         self.assertNotIn("CODEOWNERS", changed)
         self.assertNotIn(".claude/settings.json", changed)
