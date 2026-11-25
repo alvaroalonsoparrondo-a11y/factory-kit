@@ -156,6 +156,11 @@ class Repo:
             self._git("worktree", "remove", str(path))
         self._git("branch", "-D", branch, check=False)
 
+    def delete_remote_branch(self, branch):
+        """Delete a merged lap's branch on origin; the pull request keeps its history. Quiet when it is
+        already gone (GitHub's "Automatically delete head branches" does it on merge)."""
+        self._git("push", "--quiet", "origin", "--delete", branch, check=False)
+
     def add_detached_worktree(self, path, sha):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._git("worktree", "add", "--quiet", "--detach", str(path), sha)
@@ -1055,6 +1060,7 @@ class Dispatcher:
             self.repo.remove_worktree(run["worktree"], run["branch"])
         except RuntimeError as e:
             rep["needs_you"].append((ref, f"remove the worktree {run['worktree']} by hand: {e}"))
+        self.repo.delete_remote_branch(run["branch"])
         self.store.report(line)
         rep["closed"].append((ref, line))
         del runs[ref]

@@ -76,6 +76,9 @@ class FakeRepo:
     def remove_worktree(self, path, branch):
         self.calls.append(("worktree remove", branch))
 
+    def delete_remote_branch(self, branch):
+        self.calls.append(("remote delete", branch))
+
     def mark_done(self, ticket, ref, pr):
         self.calls.append(("mark done", ref, pr))
 
@@ -563,6 +566,7 @@ class Closing(unittest.TestCase):
         self.assertIn(("mark done", "1.1", "PR #5"), w.repo.calls)
         self.assertIn(("pull",), w.repo.calls)
         self.assertIn(("worktree remove", "story/1.1"), w.repo.calls)
+        self.assertIn(("remote delete", "story/1.1"), w.repo.calls)
         self.assertIn("1.1 Skeleton | PR #5 | mode: agent | fix rounds: 1 | failed checks: gates", w.store.lines[0])
         self.assertNotIn("1.1", w.store.state["runs"])
         self.assertEqual(refs(rep["claimed"]), ["1.2"])
@@ -584,6 +588,7 @@ class Closing(unittest.TestCase):
         w = self.merged_lap()
         rep = w.tick(dry=True)
         self.assertIn("would close", rep["closed"][0][1])
+        self.assertNotIn(("remote delete", "story/1.1"), w.repo.calls)
         self.assertIn("1.1", w.store.state["runs"])
         self.assertEqual(w.store.lines, [])
 

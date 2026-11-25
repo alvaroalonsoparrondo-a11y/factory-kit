@@ -2,6 +2,14 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-25 — A merged lap's branch is deleted on `origin` too (issue #46)
+
+Seen in a pilot: after 1.2 merged, `origin/story/1.2` was still there, and so was `origin/story/1.3`. Section C deleted only the local branch, so every lap left one more branch on `origin`.
+
+- **`lap` skill (both copies), step C4:** after removing the worktree and the local branch, `git push origin --delete story/<ticket-id>`. The merged pull request keeps the history. If GitHub already deleted the branch on merge, the lap goes on.
+- **`harness/dispatch/dispatch.py`:** closing a merged lap also deletes its branch on `origin` (`Repo.delete_remote_branch`), quietly when it is already gone. A hand-back is unchanged: the lap already deletes that branch in step E3.
+- **Tests:** the close test checks the remote delete; the dry-run close test checks it does not happen.
+
 ## 2026-11-24 — The GitHub board is gone; the live board is the only board (issue #40)
 
 There were two boards. The `board` workflow built `BOARD.md` and `board.json` on an orphan `board` branch; `serve.py` reads the same inputs on your machine and also sees unpushed laps, stops and quiet laps. The GitHub board showed less, had already disagreed with the live board (CI's "Start the lap" against the live "Triage it"), and cost a workflow run and a commit on almost every repository event.
