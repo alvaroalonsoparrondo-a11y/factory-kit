@@ -2,6 +2,14 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-26 — Judge: `main` after a merge is not judged again when it is the merge the judge passed (issue #50)
+
+Seen in a pilot (lap 1.3), without GitHub Actions: step A10's judge ran the gates on the pull request merged with `main` (about 3 minutes), then section C ran them again on `main` after the merge (another 2 minutes) on the same code plus a one-line plan status change.
+
+- **`harness/judge/judge.py`:** each pull request verdict keeps a fingerprint of the merged tree the gates ran on (`harness/` from `main`, as judged), leaving out `_bmad-output/`. Before running the gates on `main`, the judge fingerprints `main` the same way; when it equals a pull request merge that passed, `main` gets `gates` green ("Passed: same tree as #N merged with main …, apart from _bmad-output/") and that run stays the evidence. Anything else on `main` (another merge in between, a change to `harness/`, a red or timed-out pull request run) is judged as before.
+- **Lap skill, section C:** says the judge may reuse step A10's green for `main`.
+- **Tests:** `test_judge.py` covers the reuse, a `main` that differs, a red merge that is never reused, and the real Git fingerprint (equal after the GitHub-style merge plus a plan file, different on a code change).
+
 ## 2026-11-25 - Copilot CLI: supervised planning and triage
 
 Requested as an additional agent alongside Claude Code and Kiro. A Windows compatibility check with Copilot CLI 1.0.115 showed that repository sandbox settings are rejected and `--sandbox` alone does not protect factory files. The human chose supervised setup/planning/triage, with protected laps deferred.

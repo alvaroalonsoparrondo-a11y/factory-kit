@@ -281,6 +281,13 @@ class FakeWorkspace:
         self.codes, self.conflicts, self.main = codes or {}, set(conflicts), main
         self.folder = Path(tempfile.mkdtemp())
         self.runs, self.cleaned, self.heads = [], [], {}
+        self.trees = {}  # a commit's or merge's fingerprint, by its first 12 characters; else its own
+
+    def fingerprint(self, treeish, cwd=None):
+        return self.trees.get(treeish[:12], f"tree:{treeish[:12]}")
+
+    def merged(self, path):
+        return self.trees.get(Path(path).name, f"tree:{Path(path).name}")
 
     def fetch(self):
         return self.main
@@ -332,6 +339,36 @@ class GatesTests(unittest.TestCase):
         self.assertEqual(ws.runs, ["a" * 40, "b" * 40, MAIN])
         jd.run_pass()
         self.assertEqual(len(ws.runs), 3)  # each commit is judged once
+
+    def test_main_that_is_a_passed_merge_apart_from_plan_files_is_not_run_again(self):
+        gh, ws, jd, lines = self.setup([pr(1, "a" * 40)])
+        jd.run_pass()
+        self.assertEqual(ws.runs, ["a" * 40])
+        merged = "e" * 40  # the pull request merged on GitHub, plus a plan status line in _bmad-output/
+        ws.main, ws.trees[merged[:12]] = merged, ws.merged("a" * 12)
+        gh.pulls = []
+        jd.run_pass()
+        self.assertEqual(ws.runs, ["a" * 40])
+        self.assertEqual(self.gates(gh, merged), ["success"])
+        self.assertIn("same tree as #1 merged with main fffffff", gh.statuses[merged]["gates"]["description"])
+        jd.run_pass()
+        self.assertEqual(ws.runs, ["a" * 40])  # judged once, as any commit
+
+    def test_main_that_differs_from_every_passed_merge_runs_the_gates(self):
+        gh, ws, jd, _ = self.setup([pr(1, "a" * 40)])
+        jd.run_pass()
+        ws.main = "e" * 40
+        gh.pulls = []
+        jd.run_pass()
+        self.assertEqual(ws.runs, ["a" * 40, "e" * 40])
+
+    def test_a_red_merge_is_never_reused_for_main(self):
+        gh, ws, jd, _ = self.setup([pr(1, "a" * 40)], codes={"a" * 40: 1})
+        jd.run_pass()
+        ws.main, ws.trees["e" * 12] = "e" * 40, ws.merged("a" * 12)
+        gh.pulls = []
+        jd.run_pass()
+        self.assertIn("e" * 40, ws.runs)
 
     def test_a_failure_is_red_with_the_log_tail_in_one_comment(self):
         gh, ws, jd, _ = self.setup([pr(1, "a" * 40)], codes={"a" * 40: 1})
@@ -639,6 +676,29 @@ class WorkspaceTests(unittest.TestCase):
         with self.assertRaises(j.Conflict):
             self.ws.prepare(main, head)
         self.assertEqual(list((self.ws.folder / "work").iterdir()), [])
+
+    def test_main_after_the_merge_has_the_merges_fingerprint_apart_from_plan_files(self):
+        head = self.pull_request(1, {"app.txt": "good, changed\n"})
+        main = self.ws.fetch()
+        self.ws.fetch_pull(1)
+        path = self.ws.prepare(main, head)
+        try:
+            merge = self.ws.merged(path)
+        finally:
+            self.ws.cleanup(path)
+        git(self.seed, "merge", "-q", "--no-ff", "-m", "merge #1", "story/1")
+        (self.seed / "_bmad-output").mkdir()
+        (self.seed / "_bmad-output" / "plan.md").write_text("status: done\n")
+        after = self.commit(self.seed, "plan status")
+        git(self.seed, "push", "-q", "origin", "main")
+        self.assertEqual(self.ws.fetch(), after)
+        self.assertEqual(self.ws.fingerprint(after), merge)
+        self.assertNotEqual(self.ws.fingerprint(main), merge)
+        (self.seed / "app.txt").write_text("good, changed again\n")
+        code = self.commit(self.seed, "code")
+        git(self.seed, "push", "-q", "origin", "main")
+        self.ws.fetch()
+        self.assertNotEqual(self.ws.fingerprint(code), merge)
 
     def test_a_timeout_kills_the_gate(self):
         (self.seed / "harness/run-gates.sh").write_text("#!/usr/bin/env bash\nsleep 30\n")

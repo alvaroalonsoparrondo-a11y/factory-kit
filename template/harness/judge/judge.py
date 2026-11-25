@@ -21,7 +21,9 @@ as checks, so the board, the dispatcher and branch protection see them as they s
   changed file names and the labels, for every open pull request, every pass.
 - `gates` (as `gates.yml`): `harness/run-gates.sh` on the pull request merged with `main`, in a
   worktree of this clone, with `harness/` restored from `main` so a pull request cannot change
-  the gate that judges it. Then on `main` itself, as on a push to `main`. One gate run per pass,
+  the gate that judges it. Then on `main` itself, as on a push to `main`, unless `main` is, apart
+  from the plan files in `_bmad-output/`, a pull request merge the gates already passed on: that
+  run is the evidence, and `main` gets its green without running them again. One gate run per pass,
   oldest pull request first; each commit is judged once. A failure's last log lines go into one
   comment on the pull request, edited in place, which the dispatcher reads for a fix round.
   A pull request that conflicts with `main` gets no `gates` status: it needs a "main moved" round.
@@ -37,6 +39,7 @@ needs Pull requests read and write (the comment) and Commit statuses write. Neve
 """
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import shutil
@@ -70,6 +73,7 @@ SECRET_VARS = ("FACTORY_JUDGE_TOKEN", "FACTORY_DISPATCH_TOKEN", "GITHUB_TOKEN", 
                "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN")
 LAP_SKILLS = (".claude/skills/lap/SKILL.md", ".kiro/skills/lap/SKILL.md")
 IDENTITY = ["-c", "user.name=factory-judge", "-c", "user.email=factory-judge@localhost"]
+PLAN_FILES = "_bmad-output/"  # plan and status files a lap's merge changes on `main`; not what the gates judge
 
 
 class GitHub:
@@ -182,6 +186,16 @@ class Workspace:
             self.git("rm", "-r", "-q", "-f", "--ignore-unmatch", "harness", cwd=path)
             self.git("checkout", main, "--", "harness", cwd=path)
         return path
+
+    def fingerprint(self, treeish, cwd=None):
+        """`treeish`'s files and their contents, apart from the plan files: equal when the gates judge the same code."""
+        listing = self.git("ls-tree", "-r", "-z", "--full-tree", treeish, cwd=cwd).stdout
+        kept = [e for e in listing.split("\0") if e and not e.split("\t", 1)[-1].startswith(PLAN_FILES)]
+        return hashlib.sha256("\0".join(kept).encode("utf-8")).hexdigest()
+
+    def merged(self, path):
+        """The fingerprint of what `prepare` left in `path` (the merge, with `harness/` from `main`)."""
+        return self.fingerprint(self.git("write-tree", cwd=path).stdout.strip(), cwd=path)
 
     def run(self, path, candidate, port, log, timeout):
         """Run the gates; (exit code or None on timeout, seconds). Output goes to `log`."""
@@ -341,8 +355,26 @@ class Judge:
             return None
         main_current = self.statuses(main)
         if not self._enforce(main, main_current, "main "):
+            if self._reuse(main, main_current):
+                return ("main", "success")
             return self.run_gates(None, main, main_current)
         return None
+
+    def _reuse(self, main, current):
+        """`main` after a merge that is, apart from the plan files, a pull request merge the gates passed on: post
+        that green for `main` instead of running the gates again. False when there is no such run."""
+        tree = self.ws.fingerprint(main)
+        passed = next((v for v in reversed(list(self.verdicts.data.values()))
+                       if v.get("pull") and v.get("state") == "success" and v.get("tree") == tree), None)
+        if not passed:
+            return False
+        text = fit(f"Passed: same tree as #{passed['pull']} merged with main {passed['main'][:7]}, apart from "
+                   f"{PLAN_FILES} (factory judge).")
+        if not self.dry_run:
+            self.verdicts.put(main, {"state": "success", "description": text, "main": main, "pull": None,
+                                     "reused_from": passed["pull"], "cause": "", "tree": tree})
+        self._post(main, GATES, "success", text, current, "main ")
+        return True
 
     def red_runs(self, number):
         """This pull request's red gate runs, each commit once. A timeout is not counted: it may be the machine."""
@@ -390,6 +422,7 @@ class Judge:
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         log = self.ws.folder / "logs" / f"{sha[:12]}-{stamp}-gates.log"
         try:
+            tree = self.ws.merged(path) if pr else None
             code, seconds = self.ws.run(path, f"{sha}-judge-{stamp}", self.port, log, self.timeout)
         finally:
             self.ws.cleanup(path)
@@ -423,7 +456,8 @@ class Judge:
             else:
                 state, text = "failure", f"Failed on the {where} (factory judge); see its comment."
         self.verdicts.put(sha, {"state": state, "description": text, "main": main, "log": str(log),
-                                "pull": number, "timeout": code is None, "cause": cause or "", "evidence": evidence})
+                                "pull": number, "timeout": code is None, "cause": cause or "", "evidence": evidence,
+                                "tree": tree})
         self._post(sha, GATES, state, text, current, label)
         if pr:
             self.comment(pr["number"], sha, main, state, log, cause, evidence)
