@@ -48,6 +48,8 @@ PROJECT_DIRS = ("docs/runtime/", "docs/triage/")
 SKILL_PAIRS = tuple((f".claude/skills/{n}/SKILL.md", f".kiro/skills/{n}/SKILL.md") for n in ("lap", "triage"))
 GUARDS = "harness/judge/guards.json"
 CODEOWNERS = ".github/CODEOWNERS"
+COPILOT_SETTINGS = ".github/copilot/settings.json"
+COPILOT_DISABLED_SKILLS = ("lap", "bmad-build", "bmad-build-auto")
 PLACEHOLDERS = ("__OWNER__", "__PROJECT__", "__HOST__")
 # What the one-time setup in RUNBOOK.md leaves in place; `doctor` lists what is still open.
 LABELS = ("human-judge-change", "human-approved-irreversible", "human-granted-round")
@@ -449,6 +451,24 @@ def doctor(root, kit=None, lock=None, quiet=False, setup=False, github=True):
         skills = [normal(read(root, s)) for s in pair]
         if None in skills or skills[0] != skills[1]:
             failures.append(f"{pair[1]} must be a copy of {pair[0]}")
+    copilot = read(root, COPILOT_SETTINGS)
+    if copilot is None:
+        failures.append(f"{COPILOT_SETTINGS} is missing")
+    else:
+        try:
+            settings = json.loads(copilot.decode("utf-8-sig"))
+        except (UnicodeError, json.JSONDecodeError) as e:
+            failures.append(f"{COPILOT_SETTINGS} cannot be read ({e})")
+        else:
+            disabled = settings.get("disabledSkills") if isinstance(settings, dict) else None
+            if not isinstance(disabled, list) or not all(isinstance(s, str) for s in disabled):
+                failures.append(f"{COPILOT_SETTINGS}: disabledSkills must be a list of skill names")
+            else:
+                disabled = {s.casefold() for s in disabled}
+                missing = [s for s in COPILOT_DISABLED_SKILLS if s not in disabled]
+                if missing:
+                    failures.append(f"{COPILOT_SETTINGS} must disable {', '.join(missing)}: "
+                                    "Copilot supports supervised planning and triage only, not laps")
     owners = (read(root, CODEOWNERS) or b"").decode("utf-8", errors="replace").split()
     owner = next((w for w in owners if w.startswith("@")), "@<owner>")
     for p in paths:

@@ -49,9 +49,9 @@ python ../factory-kit/bin/kit.py sync     # takes it, on a new branch factory/sy
 
 Instead of the manual steps above, hand the setup to an agent. The steps live in [AGENT_SETUP.md](AGENT_SETUP.md); the prompt only says who, what and where.
 
-1. Open an agent session (Claude Code or Kiro CLI) in the **parent folder** where the new project should be cloned. Do not use a session opened inside an existing factory project: its rules would apply to the setup.
+1. Open an agent session (Claude Code, Kiro CLI or supervised Copilot CLI) in the **parent folder** where the new project should be cloned. Do not use a session opened inside an existing factory project: its rules would apply to the setup.
 2. The machine needs `git`, `gh` (signed in, with the `repo` and `workflow` scopes), Node, `uv`, and Git Bash on Windows.
-3. Fill in the three values and send this prompt. On GitHub Enterprise, add a `Host:` line and pass `--hostname <host>` to `gh api`. If you already have a clone of the kit, add `Kit: <path to factory-kit>` and read `AGENT_SETUP.md` from that folder instead. To set up for one agent only, add `Agents: kiro-cli` (or `claude-code`).
+3. Fill in the three values and send this prompt. On GitHub Enterprise, add a `Host:` line and pass `--hostname <host>` to `gh api`. If you already have a clone of the kit, add `Kit: <path to factory-kit>` and read `AGENT_SETUP.md` from that folder instead. To set up for one agent only, add `Agents: kiro-cli`, `claude-code` or `copilot-cli`. Copilot-only projects support planning and triage, not laps; the default remains Claude Code and Kiro.
 
 ~~~text
 Set up a new software-factory project from my factory kit.
@@ -77,3 +77,5 @@ After the agent finishes, close that session. Laps always run in a fresh session
 Tested so far: an agent-style setup of a throwaway project end to end; `gates` and `calibrate` on GitHub; the two guard checks on a real pull request. Not yet tested: a full lap. See [CHANGELOG.md](CHANGELOG.md).
 
 Kiro CLI: interactive laps are set up (`AGENTS.md`, `.kiro/agents/factory.json`, `.kiro/skills/lap/`) but not yet tested in a real lap. Planned: headless Kiro laps in the dispatcher, and AWS CodeBuild versions of the workflows.
+
+Copilot CLI: supervised setup, BMAD planning and triage share `AGENTS.md` and `.claude/skills/`, without requiring Claude Code. `.github/copilot/settings.json` disables unsupported build/lap skills; it is not a filesystem fence. Use manual permissions and review individual operations. Copilot laps and headless dispatch are not supported. See [the runbook](template/RUNBOOK.md#copilot-cli-supervised-planning-and-triage).

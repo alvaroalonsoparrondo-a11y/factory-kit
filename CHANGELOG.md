@@ -2,6 +2,16 @@
 
 Newest first. One entry per factory change: what was seen, where, and what changed. See [template/MODIFYING.md](template/MODIFYING.md). Projects keep no factory changelog; this is the only one.
 
+## 2026-11-25 - Copilot CLI: supervised planning and triage
+
+Requested as an additional agent alongside Claude Code and Kiro. A Windows compatibility check with Copilot CLI 1.0.115 showed that repository sandbox settings are rejected and `--sandbox` alone does not protect factory files. The human chose supervised setup/planning/triage, with protected laps deferred.
+
+- **Shared setup:** Copilot uses `.claude/skills/` without requiring Claude Code. Setup accepts `copilot-cli`, keeps the existing default, and explains individual manual approvals and user-managed sign-in.
+- **Workflow safeguard:** kit-owned `.github/copilot/settings.json` disables `lap`, `bmad-build` and `bmad-build-auto` for Copilot only. `kit.py doctor` checks this statically. This is not a Copilot fence.
+- **Unchanged:** Claude/Kiro rules and skills, the judge, round accounting and dispatcher. No new fence format or merge behavior.
+- **Existing projects:** human-run `kit.py sync` adds the Copilot settings and updates instructions; `.github/` and `AGENTS.md` are protected, so a human adds `human-judge-change`. No `CODEOWNERS` additions are needed: `/.github/` already covers the new file.
+- **Tracking:** GitHub issue and PR creation are blocked by github.com authentication (HTTP 401). No protected Copilot lap or Linux integration is claimed.
+
 ## 2026-11-25 — RUNBOOK: branch protection on a free private repository, and a stale "as now" (issues #21, #22)
 
 Seen while setting up `factory-pilot-2` (kit `b9de8ba`), reading `template/RUNBOOK.md`.

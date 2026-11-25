@@ -21,8 +21,8 @@ You drive the factory by hand at three points: you start each lap, you merge the
 
    `--copy` puts real files in `.claude/skills/` and `.kiro/skills/`. Without it, the skills CLI keeps one copy in `.agents/skills/` and links the agents' folders to it; `.agents/` is not committed, so a clone would get broken links. `kit.py doctor` reports linked skill folders.
 
-   Then, in an agent session here, say `bmad setup`. Commit what it created (`.claude/skills/`, `.kiro/skills/`, `_bmad/`). Drop `-a kiro-cli` if nobody will use Kiro, or `-a claude-code` if nobody will use Claude Code. The kit was last tested with the BMAD version `bmad setup` reports as `6.13.0-next`; BMAD itself records what it installed in `skills-lock.json`, which is this project's file, not the kit's.
-3. **Check the settings.** `.claude/settings.json` (Claude Code) and `.kiro/agents/factory.json` (Kiro) must exist and parse. Their deny rules are the fence: they stop the agent from editing `MISSION.md`, `FACTORY_RULES.md`, `AGENTS.md`, `CLAUDE.md`, `harness/`, `.github/`, either agent's settings, the `lap` skill and `_bmad/custom/`, and from force-pushing.
+   Then, in an agent session here, say `bmad setup`. Commit what it created (`.claude/skills/`, `.kiro/skills/`, `_bmad/`). Drop `-a kiro-cli` if nobody will use Kiro. Keep `-a claude-code` for either Claude Code or Copilot; Copilot reads `.claude/skills/` without needing Claude Code installed. Drop it only for Kiro-only setup. The kit was last tested with the BMAD version `bmad setup` reports as `6.13.0-next`; BMAD itself records what it installed in `skills-lock.json`, which is this project's file, not the kit's.
+3. **Check the settings.** `.claude/settings.json` (Claude Code) and `.kiro/agents/factory.json` (Kiro) must exist and parse. Their deny rules are the fence: they stop the agent from editing `MISSION.md`, `FACTORY_RULES.md`, `AGENTS.md`, `CLAUDE.md`, `harness/`, `.github/`, either agent's settings, the `lap` skill and `_bmad/custom/`, and from force-pushing. `.github/copilot/settings.json` disables Copilot's `lap`, `bmad-build` and `bmad-build-auto` skills; it is a workflow safeguard, **not a Copilot fence**. `doctor` checks that configuration statically, not Copilot's runtime permissions.
 4. **Create three labels** in this repository: `human-judge-change`, `human-approved-irreversible` and `human-granted-round` (the factory judge's way to give a lap one more round; see "The round budget").
 5. **Protect `main`** in this repository (Settings → Branches): require a pull request, and require these status checks: `gates`, `protected-paths`, `scope-guard`. In Settings, a check can only be selected after it has run once, so open a first small pull request (for example, the filled-in `MISSION.md`, with the `human-judge-change` label) and then add the checks. The API takes the three checks before any run: `gh api -X PUT repos/OWNER/PROJECT/branches/main/protection --input <file>`.
    - Approvals: 1, by someone other than the person who ran the lap. On a one-person trial: 0, because GitHub does not let you approve your own pull request.
@@ -85,9 +85,43 @@ If a prepared ticket's triage has still gone stale by the time you start its lap
 
 A ticket you did not prepare works as before: triage's rules apply, and otherwise you approve the plan at the checkpoint. To change the "what" of a ticket whose lap is running, stop the lap; the lap reads the ticket once, at its start.
 
+## Copilot CLI: supervised planning and triage
+
+Copilot is an additional interactive option for BMAD planning and triage, not
+for implementation or laps. It shares `.claude/skills/`; do not install a third
+copy of the factory skills. Claude Code and Kiro keep their existing behavior.
+
+1. Install Copilot CLI, then sign in yourself with `copilot login`; this is
+   separate from `gh auth login`. The integration was checked with CLI 1.0.115
+   on Windows; other versions and platforms need verification.
+2. From the project root, run `copilot instruction list --json` and
+   `copilot skill list --json`. Confirm `AGENTS.md`, the installed BMAD planning
+   skills and `triage` are discovered. These discovery commands do not prove
+   that a trusted session has applied the repository settings.
+3. Start `copilot`, trust this project's configuration, then use
+   `/permissions manual`. If this location has saved broad approvals, use
+   `/reset-allowed-tools` to clear them. Review each requested edit and command,
+   approving only the individual operation, not future blanket access.
+   Check `/skills`: `lap`, `bmad-build` and `bmad-build-auto` must be disabled.
+   Stop if the planning/triage skills are missing or a build skill is enabled;
+   never enable a build skill or implement without the required workflow.
+4. Use the existing planning skills or say `triage <ticket id>`. Review proposed
+   changes and any command that records triage before approving it. Never approve
+   edits to protected paths or commands that label, approve or merge a PR.
+   Human-only setup changes, such as the active initiative, remain yours.
+5. To build a ticket, close Copilot and start Claude Code or Kiro's `factory`
+   agent. Do not start or resume a lap in Copilot or re-enable its build skills.
+
+Claude/Kiro deny rules do not protect Copilot sessions. Manual approvals and
+disabled skills are supervision aids, not filesystem isolation. Do not use
+allow-all, assisted approvals or headless Copilot for this workflow.
+`--sandbox` alone does not configure the project's protected paths, and
+repository settings cannot set the native sandbox policy. Protected Copilot
+laps are deferred until an enforceable boundary is available.
+
 ## Run laps
 
-In an agent session opened in this folder. With Kiro, start it as the factory agent, so the fence applies:
+In a Claude Code or Kiro session opened in this folder, not Copilot. With Kiro, start it as the factory agent, so the fence applies:
 
 ```powershell
 kiro-cli chat --agent factory
